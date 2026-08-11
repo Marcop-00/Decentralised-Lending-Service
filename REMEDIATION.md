@@ -32,3 +32,10 @@ Notes
 - The files were removed from the current branch working tree and a commit was created. However, they may still exist in previous commits accessible in the repo history until the repository history is cleaned.
 - Do NOT share the original files or their contents with third parties.
 
+Local restoration (per user request)
+-----------------------------------
+- At the user's request, the removed keystore and password files were restored into a local-only directory named `.secrets/` within the working tree to preserve convenience for testing.
+- The restored files are NOT staged or committed and will not be pushed; `.secrets/` is added to `.gitignore` to prevent accidental inclusion in commits.
+- Treat these restored files as compromised: rotate any associated keys if they were used on public or shared networks.
+- To remove the restored local copies, run: rm -rf .secrets/
+
