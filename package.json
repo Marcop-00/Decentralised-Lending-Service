@@ -1,0 +1,18 @@
+{
+  "name": "decentralised-lending-service",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "clean": "hardhat clean",
+    "check:network": "node scripts/checkNetworkConfig.js",
+    "compile": "hardhat compile",
+    "fund:account": "node scripts/fundAccount.js",
+    "test": "hardhat test",
+    "node": "hardhat node"
+  },
+  "devDependencies": {
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.4",
+    "hardhat": "^2.22.18"
+  }
+}
