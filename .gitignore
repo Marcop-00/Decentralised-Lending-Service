@@ -1,0 +1,9 @@
+node_modules/
+artifacts/
+cache/
+coverage/
+
+.env
+.venv/
+venv/
+__pycache__/
