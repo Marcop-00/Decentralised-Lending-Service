@@ -1,5 +1,10 @@
-const { ethers, network } = require("hardhat");
-const assert = require("assert");
+import { expect } from "chai";
+import assert from "assert";
+import hre from "hardhat";
+import helpers from "@nomicfoundation/hardhat-network-helpers";
+
+const { ethers, network } = hre;
+const { time } = helpers;
 
 describe("Gas report sanity checks", function () {
   it("runs the main operations and stores gas data", async function () {
@@ -10,9 +15,10 @@ describe("Gas report sanity checks", function () {
     const oracle = await Oracle.deploy(minFee);
     await oracle.waitForDeployment();
 
-    const Pool = await ethers.getContractFactory("FundingPool");
-    const pool = await Pool.deploy(await oracle.getAddress());
+    const PoolFactory = await ethers.getContractFactory("FundingPool");
+    const pool = await PoolFactory.deploy();
     await pool.waitForDeployment();
+    await pool.initialize(await oracle.getAddress());
 
     const depositAmount = ethers.parseEther("2");
     const tx1 = await pool.connect(contributor).contribute({ value: depositAmount });
@@ -24,16 +30,18 @@ describe("Gas report sanity checks", function () {
       ethers.parseEther("1"),
       500,
       3600,
-      30,
+      12,
     );
     await tx2.wait();
 
     const tx3 = await pool.connect(contributor).voteOnProposal(1, true);
     await tx3.wait();
 
-    await oracle.connect(deployer).updateBalance("tb1qgasmeasure", 100_000_000n, { value: minFee });
-    await network.provider.send("evm_increaseTime", [35]);
-    await network.provider.send("evm_mine");
+    await oracle.connect(borrower).requestUpdate("tb1qgasmeasure", { value: minFee });
+    await oracle.connect(deployer).update("tb1qgasmeasure", 100_000_000n);
+    for (let i = 0; i < 12; i++) {
+      await network.provider.send("evm_mine");
+    }
 
     const tx4 = await pool.connect(borrower).executeApprovedLoan(1);
     await tx4.wait();

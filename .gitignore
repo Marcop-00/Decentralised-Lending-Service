@@ -14,3 +14,5 @@ data/keystore/*
 
 # local secrets (do not commit)
 .secrets/
+
+.DS_Store

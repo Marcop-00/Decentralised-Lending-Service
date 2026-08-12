@@ -1,5 +1,10 @@
-const { ethers } = require("hardhat");
-const assert = require("assert");
+import { expect } from "chai";
+import assert from "assert";
+import hre from "hardhat";
+import helpers from "@nomicfoundation/hardhat-network-helpers";
+
+const { ethers, network } = hre;
+const { time } = helpers;
 
 describe("Reentrancy vulnerability demo", function () {
   it("shows a reentrancy exploit against the vulnerable contract", async function () {

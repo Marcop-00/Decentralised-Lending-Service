@@ -1,6 +1,6 @@
-require("dotenv").config();
-require("@nomicfoundation/hardhat-ethers");
-require("@nomicfoundation/hardhat-chai-matchers");
+import "dotenv/config";
+import "@nomicfoundation/hardhat-ethers";
+import "@nomicfoundation/hardhat-chai-matchers";
 
 const {
   LOCAL_RPC_URL = "http://127.0.0.1:8545",
@@ -19,8 +19,16 @@ const funderKey = withHexPrefix(FUNDER_PRIVATE_KEY);
 const chainId = LOCAL_CHAIN_ID ? Number(LOCAL_CHAIN_ID) : undefined;
 
 /** @type import("hardhat/config").HardhatUserConfig */
-module.exports = {
-  solidity: "0.8.24",
+export default {
+  solidity: {
+    version: "0.8.24",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200
+      }
+    }
+  },
   networks: {
     localGenesis: {
       url: LOCAL_RPC_URL,

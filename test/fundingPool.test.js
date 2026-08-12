@@ -1,5 +1,11 @@
-const { ethers, network } = require("hardhat");
-const assert = require("assert");
+import { expect } from "chai";
+import assert from "assert";
+import hre from "hardhat";
+import helpers from "@nomicfoundation/hardhat-network-helpers";
+
+
+const { ethers, network } = hre;
+const { time } = helpers;
 
 describe("FundingPool end-to-end", function () {
   it("contribute -> propose -> vote -> execute -> repay", async function () {
@@ -12,8 +18,9 @@ describe("FundingPool end-to-end", function () {
     await oracle.waitForDeployment();
 
     const PoolFactory = await ethers.getContractFactory("FundingPool");
-    const pool = await PoolFactory.deploy(await oracle.getAddress());
+    const pool = await PoolFactory.deploy();
     await pool.waitForDeployment();
+    await pool.initialize(await oracle.getAddress());
 
     // contributor contributes 5 ETH
     await pool.connect(contributor).contribute({ value: ethers.parseEther("5") });
@@ -24,7 +31,7 @@ describe("FundingPool end-to-end", function () {
     // Borrower creates their own loan proposal
     const txCreate = await pool
       .connect(borrower)
-      .createLoanProposal(borrower.address, btcAddr, principal, 500, 3600, 30);
+      .createLoanProposal(borrower.address, btcAddr, principal, 500, 3600, 12);
     await txCreate.wait();
 
     // Contributor votes yes
@@ -34,11 +41,15 @@ describe("FundingPool end-to-end", function () {
     const SATS_PER_BTC = 100_000_000n;
     // 100 BTC in sats
     const sats = 100n * BigInt(SATS_PER_BTC);
-    await oracle.connect(deployer).updateBalance(btcAddr, sats, { value: minFee });
+    // 1. Il borrower richiede l'aggiornamento e paga la fee
+    await oracle.connect(borrower).requestUpdate(btcAddr, { value: minFee });
+    // 2. L'oracolo (deployer) elabora off-chain e aggiorna il valore
+    await oracle.connect(deployer).update(btcAddr, sats);
 
-    // Advance time past voting deadline (votingDurationSeconds was 30)
-    await network.provider.send("evm_increaseTime", [35]);
-    await network.provider.send("evm_mine");
+    // Mine enough blocks for the fixed 12-block voting window to finish.
+    for (let i = 0; i < 12; i++) {
+      await network.provider.send("evm_mine");
+    }
 
     // Applicant executes the approved loan when voting period has passed
     const txExec = await pool.connect(borrower).executeApprovedLoan(1);
