@@ -1,4 +1,6 @@
 require("dotenv").config();
+require("@nomicfoundation/hardhat-ethers");
+require("@nomicfoundation/hardhat-chai-matchers");
 
 const {
   LOCAL_RPC_URL = "http://127.0.0.1:8545",

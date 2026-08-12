@@ -7,3 +7,10 @@ coverage/
 .venv/
 venv/
 __pycache__/
+
+# ignore keystore and local password files
+data/keystore/*
+*.psw.txt
+
+# local secrets (do not commit)
+.secrets/
