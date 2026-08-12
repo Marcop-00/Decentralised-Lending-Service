@@ -62,11 +62,14 @@ contract FundingPool {
 
     uint256 public constant BTC_TO_ETH_RATE = 30;
     uint256 public constant SATS_PER_BTC = 100_000_000;
+    uint256 public constant MIN_DEPOSIT_WEI = 100_000;
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert Unauthorized();
         _;
     }
+
+    receive() external payable {}
 
     constructor(address oracleAddress) {
         if (oracleAddress == address(0)) revert InvalidAddress();
@@ -75,7 +78,7 @@ contract FundingPool {
     }
 
     function contribute() external payable {
-        if (msg.value == 0) revert AmountMustBeGreaterThanZero();
+        if (msg.value < MIN_DEPOSIT_WEI) revert AmountMustBeGreaterThanZero();
 
         totalContributed[msg.sender] += msg.value;
         totalUnlockedFunds += msg.value;
@@ -135,8 +138,9 @@ contract FundingPool {
         uint256 interestBps,
         uint256 durationSeconds,
         uint256 votingDurationSeconds
-    ) external onlyOwner returns (uint256 proposalId) {
+    ) external returns (uint256 proposalId) {
         if (borrower == address(0)) revert InvalidAddress();
+        if (borrower != msg.sender) revert Unauthorized();
         if (bytes(borrowerBtcAddress).length == 0) revert InvalidBitcoinAddress();
         if (principal == 0 || durationSeconds == 0 || votingDurationSeconds == 0) {
             revert AmountMustBeGreaterThanZero();
@@ -181,9 +185,10 @@ contract FundingPool {
         emit VoteCast(proposalId, msg.sender, support, weight);
     }
 
-    function executeApprovedLoan(uint256 proposalId) external onlyOwner returns (address loanAddress) {
+    function executeApprovedLoan(uint256 proposalId) external returns (address loanAddress) {
         LoanProposal storage proposal = proposals[proposalId];
         if (proposal.borrower == address(0)) revert InvalidProposal();
+        if (msg.sender != proposal.borrower) revert Unauthorized();
         if (block.timestamp <= proposal.votingDeadline) revert VotingStillActive();
         if (proposal.executed) revert InvalidState();
         if (proposal.yesVotes <= proposal.noVotes) revert ProposalRejected();
