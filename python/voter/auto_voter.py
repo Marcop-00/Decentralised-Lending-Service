@@ -14,6 +14,8 @@ import logging
 import os
 from web3 import Web3
 from web3.exceptions import ContractLogicError
+from dotenv import load_dotenv
+load_dotenv(".env")
 
 # ─── Configurazione Logging ──────────────────────────────────────────────────
 logging.basicConfig(
@@ -25,8 +27,8 @@ logger = logging.getLogger(__name__)
 
 # ─── Costanti e Parametri ────────────────────────────────────────────────────
 RPC_URL = os.getenv("ETH_RPC_URL", "http://127.0.0.1:8545")
-POOL_ADDRESS = "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9"
-VOTER_PRIVATE_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
+POOL_ADDRESS = os.getenv("POOL_ADDRESS")
+VOTER_PRIVATE_KEY = os.getenv("VOTER_PRIVATE_KEY")
 POLL_INTERVAL = 5 # Secondi tra un controllo e l'altro
 
 # Strategia di voto (Personalizzabile)

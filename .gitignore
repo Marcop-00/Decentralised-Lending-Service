@@ -16,3 +16,7 @@ data/keystore/*
 .secrets/
 
 .DS_Store
+
+private-chain/data/
+private-chain/geth
+*.tar.gz
