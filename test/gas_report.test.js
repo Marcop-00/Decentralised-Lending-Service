@@ -28,7 +28,7 @@ describe("Gas report sanity checks", function () {
       borrower.address,
       "tb1qgasmeasure",
       ethers.parseEther("1"),
-      500,
+      5,
       3600,
       12,
     );

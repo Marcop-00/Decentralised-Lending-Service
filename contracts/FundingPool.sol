@@ -24,6 +24,7 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     error InvalidBitcoinAddress();
     error ProposalRejectedByLiquidity();
     error InvalidVotingPeriod();
+    error InvalidInterestRate();
     error CompensationPoolEmpty();
     error ContractTerminated();
     error ContractNotTerminated();
@@ -39,18 +40,19 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         address indexed borrower,
         string borrowerBtcAddress,
         uint256 principal,
-        uint256 interestBps,
+        uint256 interestRate,
         uint256 durationBlocks,
         uint256 votingDeadlineBlock
     );
     event VoteCast(uint256 indexed proposalId, address indexed voter, bool support, uint256 weight);
     event LoanApproved(uint256 indexed proposalId, address indexed loanContract);
+    event LoanRejected(uint256 indexed proposalId, string reason);
 
     struct LoanProposal {
         address borrower;
         string borrowerBtcAddress;
         uint256 principal;
-        uint256 interestBps;
+        uint256 interestRate;
         uint256 durationBlocks;
         uint256 votingDeadlineBlock;
         uint256 yesVotes;
@@ -65,14 +67,22 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     mapping(uint256 => LoanProposal) public proposals;
     mapping(uint256 => mapping(address => bool)) public hasVoted;
     mapping(address => bool) public authorizedLoanContracts;
+    mapping(address => uint256) public loanToProposalId;
     mapping(address => bool) public isContributor;
+
+    // --- Per-Loan Tracking (by proposalId) ---
+    mapping(uint256 => address[]) public loanContributors;
+    mapping(uint256 => mapping(address => uint256)) public loanContributions;
+    mapping(uint256 => mapping(address => uint256)) public initialLoanContributions;
+    mapping(uint256 => bool) public isLoanFailed;
+    // -----------------------------------------
 
     address[] public contributors;
 
     uint256 public proposalCount;
     uint256 public totalUnlockedFunds;
     uint256 public compensationPoolBalance;
-    uint256 public collateralPercentage = 50;
+    uint256 public collateralPercentage;
     uint256 public failedLoanCount;
     bool public terminated;
     BitcoinOracle public bitcoinOracle;
@@ -95,6 +105,7 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         __Ownable_init(msg.sender);
         bitcoinOracle = BitcoinOracle(oracleAddress);
         terminated = false;
+        collateralPercentage = 50;
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
@@ -167,49 +178,55 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         }
     }
 
-    function _contributorsByLockedValue() internal view returns (address[] memory ordered) {
-        ordered = new address[](contributors.length);
-        for (uint256 i = 0; i < contributors.length; i++) {
-            ordered[i] = contributors[i];
+    function _refundLockedContributors(uint256 proposalId, uint256 baseAmount) internal {
+        if (baseAmount == 0) return;
+
+        uint256 remaining = baseAmount;
+        address[] memory loanContrs = loanContributors[proposalId];
+        
+        address[] memory order = new address[](loanContrs.length);
+        for (uint256 i = 0; i < loanContrs.length; i++) {
+            order[i] = loanContrs[i];
         }
 
-        for (uint256 i = 0; i < ordered.length; i++) {
+        for (uint256 i = 0; i < order.length; i++) {
             uint256 maxIndex = i;
-            for (uint256 j = i + 1; j < ordered.length; j++) {
-                if (lockedContributions[ordered[j]] > lockedContributions[ordered[maxIndex]]) {
+            for (uint256 j = i + 1; j < order.length; j++) {
+                uint256 lockedJ = initialLoanContributions[proposalId][order[j]];
+                uint256 lockedMax = initialLoanContributions[proposalId][order[maxIndex]];
+                if (lockedJ > lockedMax) {
+                    maxIndex = j;
+                } else if (lockedJ == lockedMax && uint160(order[j]) > uint160(order[maxIndex])) {
                     maxIndex = j;
                 }
             }
             if (maxIndex != i) {
-                address temp = ordered[i];
-                ordered[i] = ordered[maxIndex];
-                ordered[maxIndex] = temp;
+                address temp = order[i];
+                order[i] = order[maxIndex];
+                order[maxIndex] = temp;
             }
         }
-    }
-
-    function _refundLockedContributors(uint256 baseAmount) internal {
-        if (baseAmount == 0) return;
-
-        uint256 remaining = baseAmount;
-        address[] memory order = _contributorsByLockedValue();
 
         for (uint256 i = 0; i < order.length && remaining > 0; i++) {
             address contributor = order[i];
-            uint256 locked = lockedContributions[contributor];
-            if (locked == 0) continue;
+            uint256 lockedForLoan = loanContributions[proposalId][contributor];
+            if (lockedForLoan == 0) continue;
 
-            uint256 refund = remaining < locked ? remaining : locked;
+            uint256 refund = remaining < lockedForLoan ? remaining : lockedForLoan;
+            
+            loanContributions[proposalId][contributor] -= refund;
             lockedContributions[contributor] -= refund;
-            totalContributed[contributor] -= refund;
+            
             totalUnlockedFunds += refund;
             remaining -= refund;
         }
 
-        if (remaining != 0) revert InsufficientPoolLiquidity();
+        if (remaining > 0) {
+            compensationPoolBalance += remaining;
+        }
     }
 
-    function _lockContributorsProportionally(uint256 requiredAmount) internal returns (uint256 totalLocked, uint256 actualDisbursement) {
+    function _lockContributorsProportionally(uint256 requiredAmount, uint256 proposalId) internal returns (uint256 totalLocked, uint256 actualDisbursement) {
         uint256 totalDisposable = 0;
         for (uint256 i = 0; i < contributors.length; i++) {
             totalDisposable += unlockedBalanceOf(contributors[i]);
@@ -218,7 +235,6 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         if (totalDisposable == 0 || requiredAmount > totalDisposable) revert InsufficientPoolLiquidity();
 
         uint256 remaining = requiredAmount;
-        uint256 lastIndex = contributors.length;
 
         for (uint256 i = 0; i < contributors.length && remaining > 0; i++) {
             address contributor = contributors[i];
@@ -238,9 +254,13 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
 
             lockedContributions[contributor] += lockAmount;
             totalUnlockedFunds -= lockAmount;
+            
+            loanContributions[proposalId][contributor] = lockAmount;
+            initialLoanContributions[proposalId][contributor] = lockAmount;
+            loanContributors[proposalId].push(contributor);
+            
             totalLocked += lockAmount;
             remaining -= lockAmount;
-            lastIndex = i;
         }
 
         uint256 discrepancy = requiredAmount - totalLocked;
@@ -248,19 +268,38 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         return (totalLocked, actualDisbursement);
     }
 
-    function _creditEqualInterestGain(uint256 gainAmount) internal {
-        if (gainAmount == 0 || contributors.length == 0) return;
+    function _creditProportionalInterestGain(uint256 proposalId, uint256 gainAmount) internal {
+        if (gainAmount == 0) return;
+        
+        address[] memory loanContrs = loanContributors[proposalId];
+        if (loanContrs.length == 0) return;
+        
+        uint256 totalInitialLocked = 0;
+        for (uint256 i = 0; i < loanContrs.length; i++) {
+            totalInitialLocked += initialLoanContributions[proposalId][loanContrs[i]];
+        }
+        
+        if (totalInitialLocked == 0) {
+            compensationPoolBalance += gainAmount;
+            return;
+        }
 
-        uint256 equalShare = gainAmount / contributors.length;
-        uint256 remainder = gainAmount % contributors.length;
-
-        for (uint256 i = 0; i < contributors.length; i++) {
-            uint256 share = equalShare;
-            if (remainder > 0) {
-                share += 1;
-                remainder -= 1;
+        uint256 disbursed = 0;
+        for (uint256 i = 0; i < loanContrs.length; i++) {
+            address contributor = loanContrs[i];
+            uint256 initialLocked = initialLoanContributions[proposalId][contributor];
+            if (initialLocked == 0) continue;
+            
+            uint256 share = (gainAmount * initialLocked) / totalInitialLocked;
+            if (share > 0) {
+                pendingInterestGain[contributor] += share;
+                disbursed += share;
             }
-            pendingInterestGain[contributors[i]] += share;
+        }
+        
+        uint256 leftover = gainAmount - disbursed;
+        if (leftover > 0) {
+            compensationPoolBalance += leftover;
         }
     }
 
@@ -282,20 +321,34 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         if (!sent) revert TransferFailed();
     }
 
-    function requestCompensation(uint256 amount) external notTerminated {
-        if (amount == 0) revert AmountMustBeGreaterThanZero();
-        if (failedLoanCount == 0) revert InvalidState();
-        if (amount > lockedContributions[msg.sender]) revert InsufficientUnlockedBalance();
+    function requestCompensation(address loanAddress) external notTerminated {
+        if (!authorizedLoanContracts[loanAddress]) revert InvalidAddress();
         
-        uint256 actualCompensation = amount;
+        uint256 proposalId = loanToProposalId[loanAddress];
+        LoanContract loan = LoanContract(loanAddress);
+        if (loan.status() == LoanContract.LoanStatus.Repaid) revert InvalidState();
+        if (block.number <= loan.dueBlock()) revert InvalidState();
+
+        if (!isLoanFailed[proposalId]) {
+            isLoanFailed[proposalId] = true;
+            failedLoanCount += 1;
+            _adjustCollateralPercentage(false);
+        }
+        
+        uint256 owedAmount = loanContributions[proposalId][msg.sender];
+        if (owedAmount == 0) revert AmountMustBeGreaterThanZero();
+        
+        uint256 actualCompensation = owedAmount;
         if (actualCompensation > compensationPoolBalance) {
             actualCompensation = compensationPoolBalance;
         }
 
         if (actualCompensation == 0) revert CompensationPoolEmpty();
 
+        loanContributions[proposalId][msg.sender] -= actualCompensation;
         lockedContributions[msg.sender] -= actualCompensation;
         totalUnlockedFunds += actualCompensation;
+        
         compensationPoolBalance -= actualCompensation;
 
         (bool sent, ) = payable(msg.sender).call{value: actualCompensation}("");
@@ -310,26 +363,34 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         uint256 collateralAmount
     ) external notTerminated {
         if (!authorizedLoanContracts[msg.sender]) revert Unauthorized();
+        
+        uint256 proposalId = loanToProposalId[msg.sender];
 
         if (baseAmount > 0) {
-            _refundLockedContributors(baseAmount);
+            _refundLockedContributors(proposalId, baseAmount);
         }
         if (gainAmount > 0) {
-            _creditEqualInterestGain(gainAmount);
+            _creditProportionalInterestGain(proposalId, gainAmount);
         }
         if (collateralAmount > 0) {
             compensationPoolBalance += collateralAmount;
             emit CompensationPoolFunded(collateralAmount, collateralPercentage);
         }
 
-        _adjustCollateralPercentage(true);
+        LoanContract loan = LoanContract(msg.sender);
+        if (loan.status() == LoanContract.LoanStatus.Repaid) {
+            _adjustCollateralPercentage(true);
+        }
     }
 
     function handleLoanDefaulted() external notTerminated {
         if (!authorizedLoanContracts[msg.sender]) revert Unauthorized();
-
-        failedLoanCount += 1;
-        _adjustCollateralPercentage(false);
+        uint256 proposalId = loanToProposalId[msg.sender];
+        if (!isLoanFailed[proposalId]) {
+            isLoanFailed[proposalId] = true;
+            failedLoanCount += 1;
+            _adjustCollateralPercentage(false);
+        }
     }
 
     function votingPowerOf(address contributor) external view returns (uint256) {
@@ -340,7 +401,7 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         address borrower,
         string calldata borrowerBtcAddress,
         uint256 principal,
-        uint256 interestBps,
+        uint256 interestRate,
         uint256 durationBlocks,
         uint256 votingDurationBlocks
     ) external notTerminated returns (uint256 proposalId) {
@@ -349,13 +410,14 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         if (bytes(borrowerBtcAddress).length == 0) revert InvalidBitcoinAddress();
         if (principal == 0 || durationBlocks == 0) revert AmountMustBeGreaterThanZero();
         if (votingDurationBlocks != PROPOSAL_VOTING_PERIOD_BLOCKS) revert InvalidVotingPeriod();
+        if (interestRate < 1 || interestRate > 100) revert InvalidInterestRate();
 
         proposalId = ++proposalCount;
         LoanProposal storage proposal = proposals[proposalId];
         proposal.borrower = borrower;
         proposal.borrowerBtcAddress = borrowerBtcAddress;
         proposal.principal = principal;
-        proposal.interestBps = interestBps;
+        proposal.interestRate = interestRate;
         proposal.durationBlocks = durationBlocks;
         proposal.votingDeadlineBlock = block.number + PROPOSAL_VOTING_PERIOD_BLOCKS;
 
@@ -364,7 +426,7 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
             borrower,
             borrowerBtcAddress,
             principal,
-            interestBps,
+            interestRate,
             durationBlocks,
             proposal.votingDeadlineBlock
         );
@@ -395,28 +457,46 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         if (msg.sender != proposal.borrower) revert Unauthorized();
         if (block.number < proposal.votingDeadlineBlock) revert VotingStillActive();
         if (proposal.executed) revert InvalidState();
-        if (proposal.yesVotes <= proposal.noVotes) revert ProposalRejected();
+
+        if (proposal.yesVotes <= (totalUnlockedFunds / 2)) {
+            proposal.executed = true;
+            emit LoanRejected(proposalId, "Majority Reject");
+            return address(0);
+        }
+
+        if (address(this).balance < proposal.principal) {
+            proposal.executed = true;
+            emit LoanRejected(proposalId, "Insufficient Liquidity");
+            return address(0);
+        }
 
         uint256 borrowerBalanceSats = bitcoinOracle.getBalance(proposal.borrowerBtcAddress);
         uint256 borrowerLiquidityInWei = (borrowerBalanceSats * BTC_TO_ETH_RATE * 1 ether) / SATS_PER_BTC;
-        if (borrowerLiquidityInWei < proposal.principal) revert ProposalRejectedByLiquidity();
-
-        if (address(this).balance < proposal.principal) revert InsufficientPoolLiquidity();
-
-        (uint256 lockedAmount, uint256 disbursedAmount) = _lockContributorsProportionally(proposal.principal);
-        if (lockedAmount == 0) revert InsufficientPoolLiquidity();
+        if (borrowerLiquidityInWei < proposal.principal) {
+            proposal.executed = true;
+            emit LoanRejected(proposalId, "Bitcoin Liquidity Check Failed");
+            return address(0);
+        }
 
         proposal.executed = true;
+
+        (uint256 lockedAmount, uint256 disbursedAmount) = _lockContributorsProportionally(proposal.principal, proposalId);
+        if (lockedAmount == 0) {
+            emit LoanRejected(proposalId, "Failed to lock funds");
+            return address(0);
+        }
+
         LoanContract loan = new LoanContract(
             address(this),
             proposal.borrower,
             disbursedAmount,
-            proposal.interestBps,
+            proposal.interestRate,
             proposal.durationBlocks,
             collateralPercentage
         );
 
         authorizedLoanContracts[address(loan)] = true;
+        loanToProposalId[address(loan)] = proposalId;
         loan.fundLoan{value: disbursedAmount}();
         proposal.loanContract = address(loan);
         loanAddress = address(loan);

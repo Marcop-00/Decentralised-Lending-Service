@@ -9,16 +9,16 @@ describe("LoanContract unit tests", function () {
     const [deployer, borrower, dummyPool] = await ethers.getSigners();
 
     const principal = ethers.parseEther("1");
-    const interestBps = 500; // 5%
+    const interestRate = 5; // 5%
     const duration = 3600; // 1 hour
 
     const Loan = await ethers.getContractFactory("LoanContract");
-    const loan = await Loan.deploy(dummyPool.address, borrower.address, principal, interestBps, duration, 50);
+    const loan = await Loan.deploy(dummyPool.address, borrower.address, principal, interestRate, duration, 5);
     await loan.waitForDeployment();
 
-    // dueAmount = principal + principal * interestBps / 10000
+    // dueAmount = principal + principal * interestRate / 100
     const due = await loan.dueAmount();
-    const expected = principal + (principal * BigInt(interestBps)) / 10000n;
+    const expected = principal + (principal * BigInt(interestRate)) / 100n;
     assert.strictEqual(due, expected);
 
     // fundLoan must be called by pool and with exact principal

@@ -23,11 +23,10 @@ contract LoanContract {
     address public immutable pool;
     address public immutable borrower;
     uint256 public immutable principal;
-    uint256 public immutable interestBps;
+    uint256 public immutable interestRate;
     uint256 public immutable dueBlock;
     uint256 public immutable collateralPercentage;
 
-    // Nuove variabili per tracciare i rimborsi parziali
     uint256 public repaidPrincipal;
     uint256 public repaidInterest;
 
@@ -42,7 +41,7 @@ contract LoanContract {
         address poolAddress,
         address borrowerAddress,
         uint256 principalAmount,
-        uint256 interestBasisPoints,
+        uint256 loanInterestRate,
         uint256 durationBlocks,
         uint256 loanCollateralPercentage
     ) {
@@ -52,7 +51,7 @@ contract LoanContract {
         pool = poolAddress;
         borrower = borrowerAddress;
         principal = principalAmount;
-        interestBps = interestBasisPoints;
+        interestRate = loanInterestRate;
         collateralPercentage = loanCollateralPercentage;
         dueBlock = block.number + durationBlocks;
         status = LoanStatus.Created;
@@ -63,7 +62,7 @@ contract LoanContract {
     }
 
     function totalInterestAmount() public view returns (uint256) {
-        return (principal * interestBps) / 10_000;
+        return (principal * interestRate) / 100;
     }
 
     function fundLoan() external payable onlyPool {
@@ -77,51 +76,40 @@ contract LoanContract {
     }
 
     function repay() external payable {
-        // 1. Solo il richiedente originale può ripagare il prestito
         if (msg.sender != borrower) revert Unauthorized();
-        
-        // 2. Può ripagare se il prestito è attivo o fallito
         if (status != LoanStatus.Funded && status != LoanStatus.Defaulted) revert InvalidState();
         if (msg.value == 0) revert InvalidAmount();
 
         uint256 payment = msg.value;
         
-        // Calcolo di quanto manca da pagare per il capitale
         uint256 remainingPrincipal = principal - repaidPrincipal;
         uint256 baseAmount = (payment <= remainingPrincipal) ? payment : remainingPrincipal;
         
         repaidPrincipal += baseAmount;
         uint256 leftoverAfterPrincipal = payment - baseAmount;
 
-        // Calcolo di quanto manca da pagare per gli interessi
         uint256 expectedInterest = totalInterestAmount();
         uint256 remainingInterest = expectedInterest - repaidInterest;
         
         uint256 interestPaid = (leftoverAfterPrincipal <= remainingInterest) ? leftoverAfterPrincipal : remainingInterest;
         repaidInterest += interestPaid;
         
-        // 3. Tutto l'eccesso oltre al totale dovuto va alla compensation pool
         uint256 excessAmount = leftoverAfterPrincipal - interestPaid;
 
-        // Suddivisione degli interessi pagati in questa transazione
         uint256 currentCollateralAmount = (interestPaid * collateralPercentage) / 100;
         uint256 gainAmount = interestPaid - currentCollateralAmount;
 
-        // Aggiungiamo l'eventuale eccesso pagato al collaterale (che andrà alla compensation pool)
         currentCollateralAmount += excessAmount;
 
-        // 4. Se tutto è stato ripagato, aggiorniamo lo stato (solo se non era già fallito)
         if (repaidPrincipal == principal && repaidInterest == expectedInterest) {
             if (status == LoanStatus.Funded) {
                 status = LoanStatus.Repaid;
             }
         }
 
-        // Invia i fondi alla pool
         (bool sent, ) = payable(pool).call{value: msg.value}("");
         if (!sent) revert TransferFailed();
 
-        // Segnala alla pool le quote esatte
         IFundingPool(pool).handleRepayment(baseAmount, gainAmount, currentCollateralAmount);
     }
 

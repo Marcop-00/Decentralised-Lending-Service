@@ -46,7 +46,7 @@ describe("Security and Edge Cases", function () {
       await pool.connect(attacker).contribute({ value: ethers.parseEther("5") });
       
       await pool.connect(borrower).createLoanProposal(
-        borrower.address, "tb1qtest", ethers.parseEther("1"), 500, 3600, 12
+        borrower.address, "tb1qtest", ethers.parseEther("1"), 5, 3600, 12
       );
 
       // Primo voto: OK

@@ -31,7 +31,7 @@ describe("FundingPool end-to-end", function () {
     // Borrower creates their own loan proposal
     const txCreate = await pool
       .connect(borrower)
-      .createLoanProposal(borrower.address, btcAddr, principal, 500, 3600, 12);
+      .createLoanProposal(borrower.address, btcAddr, principal, 5, 3600, 12);
     await txCreate.wait();
 
     // Contributor votes yes

@@ -47,18 +47,11 @@ def evaluate_and_vote(pool_contract, voter_account, w3, proposal_id, principal, 
     """
     Valuta i parametri e invia la transazione di voto.
     """
-    # 1. Logica di valutazione
+    # 1. Logica di valutazione: la traccia richiede di votare sempre SI
     support = True
-    reason = "Rispetta i requisiti di rischio."
-    
-    if interest_bps < MIN_INTEREST_BPS:
-        support = False
-        reason = f"Interesse troppo basso ({interest_bps} bps < {MIN_INTEREST_BPS})."
-    elif duration_blocks > MAX_DURATION_BLOCKS:
-        support = False
-        reason = f"Durata troppo lunga ({duration_blocks} blocchi > {MAX_DURATION_BLOCKS})."
+    reason = "Strategia automatizzata (sempre SI)."
+    vote_str = "SI"
 
-    vote_str = "SI" if support else "NO"
     logger.info(f"Valutazione Proposta #{proposal_id}: Voto {vote_str} -> {reason}")
 
     # 2. Creazione e invio transazione

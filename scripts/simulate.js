@@ -20,7 +20,7 @@ async function main() {
     borrower.address,
     btcAddress,
     ethers.parseEther("1"), // 1 ETH
-    500, // 5% di interesse (maggiore di 400, quindi l'auto-voter dirà di SI)
+    5, // 5% di interesse
     3600, // Durata
     12 // Periodo di voto
   );

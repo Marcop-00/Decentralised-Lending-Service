@@ -44,7 +44,7 @@ describe("Gas Profiling Evaluation", function () {
       borrower.address,
       "tb1qtestaddress",
       principal,
-      500, // interest bps
+      5, // interest rate
       3600, // duration blocks
       12 // voting period blocks
     );
