@@ -1,11 +1,11 @@
 """
-auto_voter.py — Bot per la votazione automatica delle proposte di prestito.
+auto_voter.py — Automated voting bot for loan proposals.
 
-Funzionamento:
-1. Si collega al nodo locale (Hardhat).
-2. Ascolta l'evento 'LoanProposed' emesso dal FundingPool.
-3. Valuta i parametri del prestito (es. interesse e durata) usando una strategia predefinita.
-4. Invia automaticamente la transazione di voto (Sì/No).
+Operation:
+1. Connects to the local node (Hardhat).
+2. Listens for the 'LoanProposed' event emitted by the FundingPool.
+3. Evaluates loan parameters using a predefined strategy.
+4. Automatically sends the voting transaction (Yes/No).
 """
 
 import time
@@ -25,36 +25,36 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ─── Costanti e Parametri ────────────────────────────────────────────────────
+# ─── Constants and Parameters ────────────────────────────────────────────────────
 RPC_URL = os.getenv("ETH_RPC_URL", "http://127.0.0.1:8545")
 POOL_ADDRESS = os.getenv("POOL_ADDRESS")
 VOTER_PRIVATE_KEY = os.getenv("VOTER_PRIVATE_KEY")
-POLL_INTERVAL = 5 # Secondi tra un controllo e l'altro
+POLL_INTERVAL = 5 # Seconds between checks
 
-# Strategia di voto (Personalizzabile)
-MIN_INTEREST_BPS = 400  # Vota SI solo se l'interesse è almeno del 4%
-MAX_DURATION_BLOCKS = 50000 # Rifiuta prestiti con durata superiore a ~7 giorni in blocchi
+# Voting Strategy (Customizable)
+MIN_INTEREST_BPS = 400  # Vote YES only if interest is at least 4%
+MAX_DURATION_BLOCKS = 50000 # Reject loans with duration longer than ~7 days in blocks
 
-# Caricamento dinamico dell'ABI dal file compilato di Hardhat
-# Assicurati che il percorso sia corretto rispetto a dove esegui lo script
+# Dynamic ABI loading from Hardhat's compiled file
+# Make sure the path is correct relative to where you run the script
 ABI_PATH = os.path.join(
     os.path.dirname(__file__), 
     "../../artifacts/contracts/FundingPool.sol/FundingPool.json"
 )
 
-# ─── Funzione di Voto ────────────────────────────────────────────────────────
+# ─── Voting Function ────────────────────────────────────────────────────────
 def evaluate_and_vote(pool_contract, voter_account, w3, proposal_id, principal, interest_bps, duration_blocks):
     """
-    Valuta i parametri e invia la transazione di voto.
+    Evaluates parameters and sends the voting transaction.
     """
-    # 1. Logica di valutazione: la traccia richiede di votare sempre SI
+    # 1. Evaluation logic: the trace requires to always vote YES
     support = True
-    reason = "Strategia automatizzata (sempre SI)."
-    vote_str = "SI"
+    reason = "Automated strategy (always YES)."
+    vote_str = "YES"
 
-    logger.info(f"Valutazione Proposta #{proposal_id}: Voto {vote_str} -> {reason}")
+    logger.info(f"Evaluation Proposal #{proposal_id}: Vote {vote_str} -> {reason}")
 
-    # 2. Creazione e invio transazione
+    # 2. Transaction creation and sending
     try:
         nonce = w3.eth.get_transaction_count(voter_account.address)
         
@@ -68,32 +68,35 @@ def evaluate_and_vote(pool_contract, voter_account, w3, proposal_id, principal, 
         signed_tx = voter_account.sign_transaction(tx)
         tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
         
-        logger.info(f"Transazione di voto inviata! Hash: {tx_hash.hex()}")
+        logger.info(f"Voting transaction sent! Hash: {tx_hash.hex()}")
         
-        # Aspettiamo la conferma
+        # Wait for receipt
         receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-        status = "Successo" if receipt["status"] == 1 else "Fallita"
-        logger.info(f"Voto registrato con {status} nel blocco {receipt['blockNumber']}")
+        
+        if receipt["status"] == 1:
+            logger.info(f"Vote successfully recorded in block {receipt['blockNumber']}!")
+        else:
+            logger.error(f"Vote failed. Transaction reverted.")
         
     except ContractLogicError as e:
-        logger.error(f"Errore logico del contratto durante il voto: {e}")
+        logger.error(f"Contract logic error during voting: {e}")
     except Exception as e:
-        logger.error(f"Errore di rete/invio transazione: {e}")
+        logger.error(f"Network/Transaction sending error: {e}")
 
 
-# ─── Ciclo di Polling ────────────────────────────────────────────────────────
+# ─── Polling Loop ────────────────────────────────────────────────────────
 def run_polling_loop(pool_contract, voter_account, w3):
     """
-    Scansiona continuamente i nuovi blocchi per intercettare l'evento 'LoanProposed'.
+    Continuously scans new blocks to intercept the 'LoanProposed' event.
     """
-    logger.info("=== AUTO-VOTER AVVIATO ===")
-    logger.info(f"In ascolto sull'indirizzo Pool: {pool_contract.address}")
-    logger.info(f"Account votante: {voter_account.address}")
+    logger.info("=== AUTO-VOTER STARTED ===")
+    logger.info(f"Listening on Pool address: {pool_contract.address}")
+    logger.info(f"Voter account: {voter_account.address}")
     
     last_checked_block = w3.eth.block_number
     logger.info(f"Partenza dal blocco: {last_checked_block}")
 
-    # Otteniamo la firma (topic) dell'evento per filtrarlo
+    # We get the event signature (topic) to filter it
     event_signature = w3.keccak(text="LoanProposed(uint256,address,string,uint256,uint256,uint256,uint256)").hex()
 
     while True:
@@ -134,7 +137,7 @@ def run_polling_loop(pool_contract, voter_account, w3):
                 evaluate_and_vote(pool_contract, voter_account, w3, proposal_id, principal, interest_bps, duration_blocks)
 
         except Exception as e:
-            logger.error(f"Errore nel ciclo di polling: {e}. Riprovo tra {POLL_INTERVAL} secondi...")
+            logger.error(f"Polling loop error: {e}. Retrying in {POLL_INTERVAL} seconds...")
 
 
 # ─── Entry Point ─────────────────────────────────────────────────────────────

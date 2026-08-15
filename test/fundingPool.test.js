@@ -41,9 +41,9 @@ describe("FundingPool end-to-end", function () {
     const SATS_PER_BTC = 100_000_000n;
     // 100 BTC in sats
     const sats = 100n * BigInt(SATS_PER_BTC);
-    // 1. Il borrower richiede l'aggiornamento e paga la fee
+    // 1. The borrower requests the update and pays the fee
     await oracle.connect(borrower).requestUpdate(btcAddr, { value: minFee });
-    // 2. L'oracolo (deployer) elabora off-chain e aggiorna il valore
+    // 2. The oracle (deployer) processes off-chain and updates the value
     await oracle.connect(deployer).update(btcAddr, sats);
 
     // Mine enough blocks for the fixed 12-block voting window to finish.

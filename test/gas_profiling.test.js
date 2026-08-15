@@ -56,14 +56,14 @@ describe("Gas Profiling Evaluation", function () {
     receipt = await tx.wait();
     console.log(`voteOnProposal() gas used: ${receipt.gasUsed}`);
 
-    // Aggiornamento Oracolo (Setup per l'esecuzione)
+    // Oracle Update (Setup for execution)
     const minFee = ethers.parseEther("0.001");
-    // 1. Il borrower richiede l'aggiornamento pagando la fee
+    // 1. The borrower requests the update by paying the fee
     await oracle.connect(borrower).requestUpdate("tb1qtestaddress", { value: minFee });
-    // 2. L'oracolo aggiorna il dato off-chain
+    // 2. The oracle updates the data off-chain
     await oracle.connect(deployer).update("tb1qtestaddress", 100n * 100_000_000n);
 
-    // Mine dei blocchi per superare la voting deadline
+    // Mine blocks to pass the voting deadline
     for (let i = 0; i < 12; i++) {
       await network.provider.send("evm_mine");
     }
@@ -77,7 +77,7 @@ describe("Gas Profiling Evaluation", function () {
     const proposal = await pool.proposals(1);
     const loan = await ethers.getContractAt("LoanContract", proposal.loanContract);
     
-    // Invia un po' di ETH extra al borrower per pagare gli interessi
+    // Send some extra ETH to the borrower to pay interests
     await deployer.sendTransaction({ to: borrower.address, value: ethers.parseEther("1") });
     
     const due = await loan.dueAmount();

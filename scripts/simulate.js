@@ -3,7 +3,7 @@ import hre from "hardhat";
 async function main() {
   const { ethers } = hre;
   
-  // Prendiamo il terzo account per fare da richiedente (Borrower)
+  // We take the third account to act as the applicant (Borrower)
   const [deployer, contributor, borrower] = await ethers.getSigners();
 
   // Indirizzi estratti dai tuoi log
@@ -13,25 +13,25 @@ async function main() {
   const pool = await ethers.getContractAt("FundingPool", POOL_ADDRESS);
   const oracle = await ethers.getContractAt("BitcoinOracle", ORACLE_ADDRESS);
 
-  const btcAddress = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"; // L'indirizzo di Satoshi
+  const btcAddress = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"; // Satoshi's address
 
-  console.log("1. Il Borrower sta creando una proposta di prestito (1 ETH al 5%)...");
+  console.log("1. The Borrower is creating a loan proposal (1 ETH at 5%)...");
   const tx1 = await pool.connect(borrower).createLoanProposal(
     borrower.address,
     btcAddress,
     ethers.parseEther("1"), // 1 ETH
-    5, // 5% di interesse
-    3600, // Durata
-    12 // Periodo di voto
+    5, // 5% interest
+    3600, // Duration
+    12 // Voting period
   );
   await tx1.wait();
-  console.log("✅ Proposta creata! Guarda il terminale dell'Auto-Voter!");
+  console.log("✅ Proposal created! Check the Auto-Voter terminal!");
 
-  console.log("\n2. Il Borrower sta richiedendo l'aggiornamento del saldo all'oracolo...");
+  console.log("\n2. The Borrower is requesting balance update from the oracle...");
   const minFee = await oracle.minFee();
   const tx2 = await oracle.connect(borrower).requestUpdate(btcAddress, { value: minFee });
   await tx2.wait();
-  console.log("✅ Richiesta inviata! Guarda il terminale dell'Oracolo!");
+  console.log("✅ Request sent! Check the Oracle terminal!");
 }
 
 main().catch((error) => {

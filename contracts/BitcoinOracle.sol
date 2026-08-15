@@ -7,7 +7,7 @@ contract BitcoinOracle is Ownable {
     uint256 public immutable minFee;
     mapping(string => uint256) private balances;
 
-    // Evento ascoltato dallo script Python
+    // Event listened to by the Python script
     event UpdateRequested(string btcAddress, address indexed requester, uint256 fee);
     event BalanceUpdated(string btcAddress, uint256 balanceInSatoshi);
 
@@ -17,7 +17,7 @@ contract BitcoinOracle is Ownable {
         minFee = _minFee;
     }
 
-    // 1. Il richiedente (applicant) chiama questa funzione e paga la fee
+    // 1. The applicant calls this function and pays the fee
     function requestUpdate(string calldata btcAddress) external payable {
         if (msg.value < minFee) revert InsufficientFee();
         
@@ -25,13 +25,13 @@ contract BitcoinOracle is Ownable {
         emit UpdateRequested(btcAddress, msg.sender, msg.value);
     }
 
-    // 2. Lo script Python elabora il blocco e chiama questa funzione
+    // 2. The Python script processes the block and calls this function
     function update(string calldata btcAddress, uint256 balanceInSatoshi) external onlyOwner {
         balances[btcAddress] = balanceInSatoshi;
         emit BalanceUpdated(btcAddress, balanceInSatoshi);
     }
 
-    // 3. Il FundingPool legge il bilancio da qui
+    // 3. The FundingPool reads the balance from here
     function getBalance(string calldata btcAddress) external view returns (uint256) {
         return balances[btcAddress];
     }

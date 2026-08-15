@@ -25,7 +25,7 @@ describe("Security and Edge Cases", function () {
 
   describe("BitcoinOracle Access Control", function () {
     it("Should revert if an unauthorized user tries to update the balance", async function () {
-      // L'attaccante cerca di aggiornare il saldo al posto dell'operatore autorizzato
+      // The attacker tries to update the balance instead of the authorized operator
       await expect(
         oracle.connect(attacker).update("tb1qtestaddress", 500000n)
       ).to.be.revertedWithCustomError(oracle, "OwnableUnauthorizedAccount");
@@ -33,7 +33,7 @@ describe("Security and Edge Cases", function () {
 
     it("Should revert if the fee sent for an update request is too low", async function () {
       const minFee = await oracle.minFee();
-      const badFee = minFee - 1n; // Appena sotto il minimo
+      const badFee = minFee - 1n; // Just below the minimum
       
       await expect(
         oracle.connect(borrower).requestUpdate("tb1qtestaddress", { value: badFee })
@@ -53,7 +53,7 @@ describe("Security and Edge Cases", function () {
       await pool.connect(attacker).voteOnProposal(1, true);
       
       // Secondo voto: Fallisce (assumendo che tu abbia un controllo nel contratto, es. "Already voted")
-      // Usa l'errore o il revert generico a seconda di come hai implementato Require
+      // Use the generic error or revert depending on how Require was implemented
       await expect(
         pool.connect(attacker).voteOnProposal(1, true)
       ).to.be.reverted; 

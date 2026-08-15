@@ -8,8 +8,8 @@ async function main() {
   // 1. L'account pre-finanziato sbloccato su Geth
   const PREFUNDED_ADDRESS = "0xd278d247a52c550508ea2b2c9321d816238fb523";
   
-  console.log("⚙️  Generazione di nuovi account per il sistema...");
-  // 2. Creiamo nuovi wallet casuali (non usiamo quello del prof per il deploy!)
+  console.log("⚙️  Generating new accounts for the system...");
+  // 2. We create new random wallets (we don't use the professor's for deployment!)
   const deployer = ethers.Wallet.createRandom().connect(ethers.provider);
   const contributor = ethers.Wallet.createRandom().connect(ethers.provider);
   const borrower = ethers.Wallet.createRandom().connect(ethers.provider);
@@ -17,19 +17,19 @@ async function main() {
   console.log(`- Nuovo Deployer: ${deployer.address}`);
   console.log(`- Nuovo Contributor: ${contributor.address}`);
 
-  console.log("\n💸 Trasferimento fondi dall'account pre-finanziato ai nuovi account...");
-  // 3. Inviamo i fondi usando il metodo RPC grezzo (poiché la chiave privata non è in Ethers ma nel Keystore di Geth)
+  console.log("\n💸 Transferring funds from pre-funded account to new accounts...");
+  // 3. We send funds using the raw RPC method (since the private key is not in Ethers but in the Geth Keystore)
   const fundAmount = "0x" + ethers.parseEther("100").toString(16); // Formattazione esadecimale stretta
   
   await ethers.provider.send("eth_sendTransaction", [{ from: PREFUNDED_ADDRESS, to: deployer.address, value: fundAmount }]);
   await ethers.provider.send("eth_sendTransaction", [{ from: PREFUNDED_ADDRESS, to: contributor.address, value: fundAmount }]);
   await ethers.provider.send("eth_sendTransaction", [{ from: PREFUNDED_ADDRESS, to: borrower.address, value: fundAmount }]);
   
-  console.log("⏳ Attesa del mining della transazione di finanziamento (circa 10 secondi)...");
-  // Aspettiamo che il blocco venga minato (il genesis ha block time a 10s)
+  console.log("⏳ Waiting for the funding transaction to be mined (about 10 seconds)...");
+  // We wait for the block to be mined (the genesis has a block time of 10s)
   await new Promise(r => setTimeout(r, 12000));
 
-  console.log("\n🚀 Avvio deploy dei contratti con il nuovo account Deployer...");
+  console.log("\n🚀 Starting contract deployment with the new Deployer account...");
   // Da qui in poi, usiamo l'account `deployer` appena creato, RISPETTANDO LA TRACCIA!
   const minFee = ethers.parseEther("0.001");
   const Oracle = await ethers.getContractFactory("BitcoinOracle", deployer);

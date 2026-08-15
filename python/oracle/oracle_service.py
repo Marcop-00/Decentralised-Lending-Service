@@ -161,11 +161,11 @@ def main() -> None:
     operator_account = w3.eth.account.from_key(operator_key)
     oracle_contract = w3.eth.contract(address=Web3.to_checksum_address(oracle_addr), abi=ORACLE_ABI)
 
-    # Phase 1: Sync (Solo se hai davvero i file .dat. Se non li hai, il codice salterà la fase 1 e passerà al polling)
+    # Phase 1: Sync (Only if you really have the .dat files. If not, it skips to polling)
     if os.path.exists(blk_dat_dir):
         sync_bitcoin_blocks(blk_dat_dir)
     else:
-        logger.warning(f"Cartella Bitcoin non trovata in {blk_dat_dir}. I saldi saranno a zero (ma il polling funzionerà).")
+        logger.warning(f"Bitcoin folder not found in {blk_dat_dir}. Balances will be zero (but polling will work).")
 
     # Phase 2: Poll
     run_polling_loop(oracle_contract, operator_account, w3)
