@@ -137,7 +137,7 @@ cd private-chain
 
 ```bash
 # Terminal 2: Deploy to private network
-npx hardhat run scripts/deploy_private.js --network localhost
+python python/setup.py
 ```
 
 This will:
@@ -160,7 +160,7 @@ python python/voter/auto_voter.py
 
 ```bash
 # Terminal 5: Run simulation
-npx hardhat run scripts/simulate.js --network localhost
+python python/simulate.py
 ```
 
 ## 📊 Lending Flow Example
@@ -312,9 +312,8 @@ REPORT_GAS=true npx hardhat test
 │   ├── ReentrancyVulnerableLoan.sol # Vulnerable version (for testing)
 │   └── ReentrancyAttacker.sol     # Attack contract (for testing)
 │
-├── scripts/                        # Deployment & interaction scripts
-│   ├── deploy_private.js          # Deploy to private Geth network
-│   └── simulate.js                # Simulate lending flow
+├── docs/                           # Documentation
+│   └── report.tex                 # LaTeX Project Report
 │
 ├── test/                          # Test suite
 │   ├── fundingPool.test.js        # Integration tests
@@ -322,7 +321,8 @@ REPORT_GAS=true npx hardhat test
 │   ├── reentrancy.test.js         # Security tests
 │   ├── security_edge_cases.test.js # Edge case tests
 │   ├── gas_profiling.test.js      # Gas analysis
-│   └── gas_report.test.js         # Gas reporting
+│   ├── gas_report.test.js         # Gas reporting
+│   └── advanced_behaviors.test.js # Partial repayment and compensation tests
 │
 ├── python/                        # Off-chain services
 │   ├── oracle/
