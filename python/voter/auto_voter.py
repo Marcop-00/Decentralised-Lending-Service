@@ -8,16 +8,18 @@ Operation:
 4. Automatically sends the voting transaction (Yes/No).
 """
 
-import time
 import json
 import logging
 import os
+import time
+
+from dotenv import load_dotenv
 from web3 import Web3
 from web3.exceptions import ContractLogicError
-from dotenv import load_dotenv
+
 load_dotenv(".env")
 
-# ─── Configurazione Logging ──────────────────────────────────────────────────
+# ─── Logging Configuration ───────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -30,10 +32,6 @@ RPC_URL = os.getenv("ETH_RPC_URL", "http://127.0.0.1:8545")
 POOL_ADDRESS = os.getenv("POOL_ADDRESS")
 VOTER_PRIVATE_KEY = os.getenv("VOTER_PRIVATE_KEY")
 POLL_INTERVAL = 5 # Seconds between checks
-
-# Voting Strategy (Customizable)
-MIN_INTEREST_BPS = 400  # Vote YES only if interest is at least 4%
-MAX_DURATION_BLOCKS = 50000 # Reject loans with duration longer than ~7 days in blocks
 
 # Dynamic ABI loading from Hardhat's compiled file
 # Make sure the path is correct relative to where you run the script
@@ -76,7 +74,7 @@ def evaluate_and_vote(pool_contract, voter_account, w3, proposal_id, principal, 
         if receipt["status"] == 1:
             logger.info(f"Vote successfully recorded in block {receipt['blockNumber']}!")
         else:
-            logger.error(f"Vote failed. Transaction reverted.")
+            logger.error("Vote failed. Transaction reverted.")
         
     except ContractLogicError as e:
         logger.error(f"Contract logic error during voting: {e}")
@@ -94,7 +92,7 @@ def run_polling_loop(pool_contract, voter_account, w3):
     logger.info(f"Voter account: {voter_account.address}")
     
     last_checked_block = w3.eth.block_number
-    logger.info(f"Partenza dal blocco: {last_checked_block}")
+    logger.info(f"Starting from block: {last_checked_block}")
 
     # We get the event signature (topic) to filter it
     event_signature = w3.keccak(text="LoanProposed(uint256,address,string,uint256,uint256,uint256,uint256)").hex()
@@ -107,7 +105,7 @@ def run_polling_loop(pool_contract, voter_account, w3):
             if current_block <= last_checked_block:
                 continue
 
-            # Cerchiamo i log tra l'ultimo blocco controllato e quello attuale
+            # Look for logs between the last checked block and the current one
             logs = w3.eth.get_logs({
                 "address": pool_contract.address,
                 "topics": [event_signature],
@@ -118,7 +116,7 @@ def run_polling_loop(pool_contract, voter_account, w3):
             last_checked_block = current_block
 
             for log in logs:
-                # Decodifichiamo l'evento usando web3.py
+                # Decode the event using web3.py
                 event = pool_contract.events.LoanProposed().process_log(log)
                 args = event["args"]
                 
@@ -130,9 +128,9 @@ def run_polling_loop(pool_contract, voter_account, w3):
                 
                 principal_eth = w3.from_wei(principal, 'ether')
                 
-                logger.info(f"--- NUOVA PROPOSTA RILEVATA ---")
+                logger.info("--- NEW PROPOSAL DETECTED ---")
                 logger.info(f"ID: {proposal_id} | Da: {borrower}")
-                logger.info(f"Richiesta: {principal_eth} ETH | Interesse: {interest_bps} bps | Durata: {duration_blocks} blocchi")
+                logger.info(f"Request: {principal_eth} ETH | Interest: {interest_bps} bps | Duration: {duration_blocks} blocks")
                 
                 evaluate_and_vote(pool_contract, voter_account, w3, proposal_id, principal, interest_bps, duration_blocks)
 
@@ -145,11 +143,11 @@ if __name__ == "__main__":
     w3 = Web3(Web3.HTTPProvider(RPC_URL))
     
     if not w3.is_connected():
-        logger.error("Impossibile connettersi al nodo Ethereum. Assicurati che Hardhat sia in esecuzione.")
+        logger.error("Failed to connect to Ethereum node. Ensure Hardhat or Geth is running.")
         exit(1)
         
     if POOL_ADDRESS == "0x..." or VOTER_PRIVATE_KEY == "0x...":
-        logger.error("Devi configurare POOL_ADDRESS e VOTER_PRIVATE_KEY nello script o nel file .env!")
+        logger.error("You must configure POOL_ADDRESS and VOTER_PRIVATE_KEY in the script or in the .env file!")
         exit(1)
 
     voter_account = w3.eth.account.from_key(VOTER_PRIVATE_KEY)

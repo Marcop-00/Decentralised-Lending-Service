@@ -3,13 +3,10 @@ import os
 import sys
 import time
 from collections import defaultdict
-from pathlib import Path
 
+from btc_utils import is_coinbase, parse_blocks, script_to_address
 from dotenv import load_dotenv
 from web3 import Web3
-from web3.exceptions import ContractLogicError
-
-from btc_utils import parse_blocks, is_coinbase, script_to_address
 
 # ─── Logging ─────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
@@ -53,7 +50,7 @@ def _add_utxo(txid: str, vout: int, address: str, satoshi: int) -> None:
 def _remove_utxo(txid: str, vout: int) -> None:
     entry = utxo_set.pop((txid, vout), None)
     if entry is not None:
-        address, satoshi = entry
+        address, _ = entry
         addr_utxos[address].pop((txid, vout), None)
         if not addr_utxos[address]:
             del addr_utxos[address]
@@ -85,7 +82,7 @@ def sync_bitcoin_blocks(blk_dat_dir: str) -> None:
         try:
             process_block(block, block_height)
             blocks_processed += 1
-        except Exception as exc:
+        except Exception:
             continue
         if blocks_processed % 10_000 == 0:
             logger.info("  Processed %6d blocks | UTXO set: %d entries", blocks_processed, len(utxo_set))

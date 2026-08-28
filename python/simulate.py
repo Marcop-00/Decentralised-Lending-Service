@@ -2,8 +2,10 @@ import json
 import os
 import time
 from pathlib import Path
-from web3 import Web3
+
 from dotenv import load_dotenv
+from web3 import Web3
+
 
 def get_contract(w3, contract_name, address):
     artifact_path = Path(f"artifacts/contracts/{contract_name}.sol/{contract_name}.json")

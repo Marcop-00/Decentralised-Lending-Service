@@ -17,7 +17,7 @@ export default {
     localhost: {
       url: "http://127.0.0.1:8545",
       chainId: 202526, // The chainId requested by the professor's trace
-      timeout: 120000 // Timeout alzato perché Geth mina un blocco ogni 10 secondi
+      timeout: 120000 // Timeout increased because Geth mines a block every 10 seconds
     }
   }
 };

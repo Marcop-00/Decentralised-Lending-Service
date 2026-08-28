@@ -2,7 +2,9 @@ import json
 import os
 import time
 from pathlib import Path
+
 from web3 import Web3
+
 
 def main():
     print("⚙️  Connecting to local Geth node...")
@@ -19,9 +21,9 @@ def main():
     contributor = w3.eth.account.create()
     borrower = w3.eth.account.create()
 
-    print(f"- Nuovo Deployer: {deployer.address}")
-    print(f"- Nuovo Contributor: {contributor.address}")
-    print(f"- Nuovo Borrower: {borrower.address}")
+    print(f"- New Deployer: {deployer.address}")
+    print(f"- New Contributor: {contributor.address}")
+    print(f"- New Borrower: {borrower.address}")
 
     print("\n💸 Transferring funds from pre-funded account to new accounts...")
     
@@ -67,11 +69,11 @@ def main():
     # Deploy BitcoinOracle
     min_fee = w3.to_wei(0.001, 'ether')
     oracle_address, _ = deploy_contract("BitcoinOracle", min_fee)
-    print(f"✅ BitcoinOracle deployato a: {oracle_address}")
+    print(f"✅ BitcoinOracle deployed at: {oracle_address}")
 
     # Deploy FundingPool
     pool_address, pool_abi = deploy_contract("FundingPool")
-    print(f"✅ FundingPool deployata a: {pool_address}")
+    print(f"✅ FundingPool deployed at: {pool_address}")
 
     # Initialize FundingPool
     Pool = w3.eth.contract(address=pool_address, abi=pool_abi)
@@ -86,7 +88,7 @@ def main():
     w3.eth.wait_for_transaction_receipt(signed_init_tx.hash)
     print("✅ FundingPool initialized")
 
-    print("\n⚙️  Generazione automatica dei file .env...")
+    print("\n⚙️  Automatic generation of .env files...")
     env_content = f"""ETH_RPC_URL=http://127.0.0.1:8545
 ORACLE_ADDRESS={oracle_address}
 POOL_ADDRESS={pool_address}
@@ -106,7 +108,7 @@ BLK_DAT_DIR=../../bitcoin
     with open(os.path.join(os.getcwd(), "python", ".env"), "w") as f:
         f.write(env_content)
 
-    print("✅ Setup Completato! L'infrastruttura è pronta.")
+    print("✅ Setup Complete! The infrastructure is ready.")
 
 if __name__ == "__main__":
     main()

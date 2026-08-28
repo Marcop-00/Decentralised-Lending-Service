@@ -3,6 +3,9 @@ pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+/// @title BitcoinOracle
+/// @notice Simulates a cross-chain oracle to verify a borrower's Bitcoin collateral.
+/// @dev A Python script (Oracle Service) listens to events and pushes data back.
 contract BitcoinOracle is Ownable {
     uint256 public immutable minFee;
     mapping(string => uint256) private balances;
@@ -18,10 +21,12 @@ contract BitcoinOracle is Ownable {
     }
 
     // 1. The applicant calls this function and pays the fee
+    /// @notice Requests a balance update for a specific Bitcoin address.
+    /// @param btcAddress The Bitcoin address (e.g. starting with bc1 or 1) to check.
     function requestUpdate(string calldata btcAddress) external payable {
         if (msg.value < minFee) revert InsufficientFee();
         
-        // Emette l'evento che farà scattare lo script Python
+        // Emits the event that will trigger the Python script
         emit UpdateRequested(btcAddress, msg.sender, msg.value);
     }
 

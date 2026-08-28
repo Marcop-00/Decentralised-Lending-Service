@@ -39,11 +39,11 @@ order, where `height` is the TRUE block height (0 = genesis).
 """
 
 import hashlib
+import logging
 import os
 import struct
-import logging
 from collections import defaultdict
-from typing import Dict, Generator, List, Optional, Tuple
+from collections.abc import Generator
 
 import bitcoin
 from bitcoin.core import CBlock, b2lx
@@ -73,7 +73,7 @@ def _iter_blk_files(blk_dir: str) -> Generator[str, None, None]:
         index += 1
 
 
-def _resolve_files(blk_dat_path: str) -> List[str]:
+def _resolve_files(blk_dat_path: str) -> list[str]:
     """Accept either a directory of blk*.dat files or a single .dat file."""
     if os.path.isdir(blk_dat_path):
         return list(_iter_blk_files(blk_dat_path))
@@ -117,7 +117,7 @@ def _hash_block_header(header: bytes) -> bytes:
 # ─── Pass 1: header scan ──────────────────────────────────────────────────────
 
 class _HeaderRecord:
-    __slots__ = ("hash", "prev", "work", "file_path", "offset", "size")
+    __slots__ = ("file_path", "hash", "offset", "prev", "size", "work")
 
     def __init__(self, hash_: bytes, prev: bytes, work: int,
                  file_path: str, offset: int, size: int) -> None:
@@ -129,14 +129,14 @@ class _HeaderRecord:
         self.size = size
 
 
-def _scan_headers(files: List[str]) -> List[_HeaderRecord]:
+def _scan_headers(files: list[str]) -> list[_HeaderRecord]:
     """
     Walk every blk*.dat file, read only the 80-byte header of each record,
     skip the rest of the block, and accumulate one _HeaderRecord per block.
 
     Memory cost: ~100 bytes per block. For 131 000 blocks this is ~13 MB.
     """
-    records: List[_HeaderRecord] = []
+    records: list[_HeaderRecord] = []
     total_bytes = 0
 
     for file_path in files:
@@ -195,7 +195,7 @@ def _scan_headers(files: List[str]) -> List[_HeaderRecord]:
 
 # ─── Pass 2: canonical chain selection ────────────────────────────────────────
 
-def _build_canonical_chain(records: List[_HeaderRecord]) -> List[_HeaderRecord]:
+def _build_canonical_chain(records: list[_HeaderRecord]) -> list[_HeaderRecord]:
     """
     Build the canonical chain (greatest cumulative work) starting from
     genesis. Returns the list of records in chain order, from height 0
@@ -212,8 +212,8 @@ def _build_canonical_chain(records: List[_HeaderRecord]) -> List[_HeaderRecord]:
       4. Reconstruct the chain from the heaviest tip back to genesis via
          the parent map, then reverse to get ascending-height order.
     """
-    by_hash: Dict[bytes, _HeaderRecord] = {r.hash: r for r in records}
-    children: Dict[bytes, List[bytes]] = defaultdict(list)
+    by_hash: dict[bytes, _HeaderRecord] = {r.hash: r for r in records}
+    children: dict[bytes, list[bytes]] = defaultdict(list)
     for r in records:
         children[r.prev].append(r.hash)
 
@@ -230,15 +230,15 @@ def _build_canonical_chain(records: List[_HeaderRecord]) -> List[_HeaderRecord]:
         )
 
     # ── BFS computing cumulative work + parent map ────────────────────────────
-    cum_work: Dict[bytes, int] = {}
-    parent: Dict[bytes, Optional[bytes]] = {}
+    cum_work: dict[bytes, int] = {}
+    parent: dict[bytes, bytes | None] = {}
 
-    best_tip: Optional[bytes] = None
+    best_tip: bytes | None = None
     best_work = -1
 
     # Iterative DFS using an explicit stack — avoids Python recursion limits
     # on chains tens of thousands of blocks long.
-    stack: List[bytes] = []
+    stack: list[bytes] = []
     for g in genesis_candidates:
         cum_work[g] = by_hash[g].work
         parent[g] = None
@@ -267,8 +267,8 @@ def _build_canonical_chain(records: List[_HeaderRecord]) -> List[_HeaderRecord]:
         return []
 
     # ── reconstruct chain genesis → best_tip ──────────────────────────────────
-    chain_hashes: List[bytes] = []
-    h: Optional[bytes] = best_tip
+    chain_hashes: list[bytes] = []
+    h: bytes | None = best_tip
     while h is not None:
         chain_hashes.append(h)
         h = parent[h]
@@ -282,7 +282,7 @@ def _build_canonical_chain(records: List[_HeaderRecord]) -> List[_HeaderRecord]:
 def parse_blocks(
     blk_dat_path: str,
     max_blocks: int = 131_000,
-) -> Generator[Tuple[int, CBlock], None, None]:
+) -> Generator[tuple[int, CBlock], None, None]:
     """
     Yield (height, CBlock) pairs in canonical-chain order.
 
@@ -319,7 +319,7 @@ def parse_blocks(
 
     # Pass 3: re-read each block in chain order via seek(offset)
     # Keep file handles open across iterations to amortise the open() cost.
-    open_files: Dict[str, "object"] = {}
+    open_files: dict[str, object] = {}
     try:
         for height, rec in enumerate(canonical):
             if height >= max_blocks:
@@ -372,7 +372,7 @@ def is_coinbase(tx) -> bool:
     )
 
 
-def script_to_address(script_pubkey) -> Optional[str]:
+def script_to_address(script_pubkey) -> str | None:
     """Extract a human-readable Bitcoin address from a scriptPubKey.
 
     Recognised script types (matched against raw bytes for robustness across
@@ -389,9 +389,6 @@ def script_to_address(script_pubkey) -> Optional[str]:
 
     Returns None for non-standard scripts (OP_RETURN, bare multisig, etc.).
     """
-    from bitcoin.core.script import (
-        CScript, OP_CHECKSIG, OP_DUP, OP_HASH160, OP_EQUALVERIFY,
-    )
     from bitcoin.wallet import CBitcoinAddress
 
     raw = bytes(script_pubkey)
@@ -431,7 +428,7 @@ def script_to_address(script_pubkey) -> Optional[str]:
     return None
 
 
-def _p2pk_to_address(pubkey: bytes) -> Optional[str]:
+def _p2pk_to_address(pubkey: bytes) -> str | None:
     """Derive the P2PKH-equivalent address from a P2PK public key.
 
     Bitcoin treats a P2PK output as belonging to the same address that a
@@ -440,7 +437,11 @@ def _p2pk_to_address(pubkey: bytes) -> Optional[str]:
     1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa.
     """
     from bitcoin.core.script import (
-        CScript, OP_CHECKSIG, OP_DUP, OP_HASH160, OP_EQUALVERIFY,
+        OP_CHECKSIG,
+        OP_DUP,
+        OP_EQUALVERIFY,
+        OP_HASH160,
+        CScript,
     )
     from bitcoin.wallet import CBitcoinAddress
 

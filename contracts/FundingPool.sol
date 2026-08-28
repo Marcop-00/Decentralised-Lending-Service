@@ -7,6 +7,9 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "./LoanContract.sol";
 import "./BitcoinOracle.sol";
 
+/// @title FundingPool
+/// @notice Manages lending pool contributions, loan proposals, and voting mechanics.
+/// @dev Implements UUPS proxy pattern for upgradeability.
 contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     error AmountMustBeGreaterThanZero();
     error InsufficientUnlockedBalance();
@@ -120,6 +123,8 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         terminated = false;
     }
 
+    /// @notice Allows users to contribute ETH to the lending pool.
+    /// @dev Updates the contributor's unlocked balance and total pool balance.
     function contribute() external payable notTerminated {
         if (msg.value < MIN_DEPOSIT_WEI) revert AmountMustBeGreaterThanZero();
 
@@ -130,6 +135,8 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         emit ContributionAdded(msg.sender, msg.value);
     }
 
+    /// @notice Allows contributors to withdraw their unlocked funds.
+    /// @param amount The amount of ETH to withdraw in wei.
     function withdraw(uint256 amount) external notTerminated {
         if (amount == 0) revert AmountMustBeGreaterThanZero();
 
@@ -397,6 +404,13 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         return unlockedBalanceOf(contributor);
     }
 
+    /// @notice Creates a new loan proposal to be voted on by contributors.
+    /// @param borrower The Ethereum address of the borrower.
+    /// @param borrowerBtcAddress The Bitcoin collateral address of the borrower.
+    /// @param principal The requested loan amount in wei.
+    /// @param interestRate The offered interest rate in basis points (1% = 100).
+    /// @param durationBlocks The duration of the loan in blocks.
+    /// @param votingDurationBlocks The duration of the voting period in blocks.
     function createLoanProposal(
         address borrower,
         string calldata borrowerBtcAddress,
@@ -451,6 +465,9 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         emit VoteCast(proposalId, msg.sender, support, weight);
     }
 
+    /// @notice Executes an approved loan proposal, deploying a new LoanContract.
+    /// @param proposalId The ID of the proposal to execute.
+    /// @return loanAddress The address of the newly deployed LoanContract.
     function executeApprovedLoan(uint256 proposalId) external notTerminated returns (address loanAddress) {
         LoanProposal storage proposal = proposals[proposalId];
         if (proposal.borrower == address(0)) revert InvalidProposal();

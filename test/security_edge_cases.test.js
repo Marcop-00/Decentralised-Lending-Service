@@ -49,10 +49,10 @@ describe("Security and Edge Cases", function () {
         borrower.address, "tb1qtest", ethers.parseEther("1"), 5, 3600, 12
       );
 
-      // Primo voto: OK
+      // First vote: OK
       await pool.connect(attacker).voteOnProposal(1, true);
       
-      // Secondo voto: Fallisce (assumendo che tu abbia un controllo nel contratto, es. "Already voted")
+      // Second vote: Fails (assuming there is a check in the contract, e.g. "Already voted")
       // Use the generic error or revert depending on how Require was implemented
       await expect(
         pool.connect(attacker).voteOnProposal(1, true)

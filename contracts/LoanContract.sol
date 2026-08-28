@@ -6,6 +6,9 @@ interface IFundingPool {
     function handleLoanDefaulted() external;
 }
 
+/// @title LoanContract
+/// @notice Represents an individual loan managed by the FundingPool.
+/// @dev Ephemeral contract deployed for each approved loan. Handles repayment logic and state machine.
 contract LoanContract {
     enum LoanStatus {
         Created,
@@ -57,6 +60,8 @@ contract LoanContract {
         status = LoanStatus.Created;
     }
 
+    /// @notice Calculates the total amount due for repayment.
+    /// @return The sum of the principal and total interest.
     function dueAmount() public view returns (uint256) {
         return principal + totalInterestAmount();
     }
@@ -65,6 +70,8 @@ contract LoanContract {
         return (principal * interestRate) / 100;
     }
 
+    /// @notice Funds the loan by transferring the principal to the borrower.
+    /// @dev Can only be called by the FundingPool once.
     function fundLoan() external payable onlyPool {
         if (status != LoanStatus.Created) revert InvalidState();
         if (msg.value != principal) revert InvalidAmount();
@@ -75,6 +82,9 @@ contract LoanContract {
         if (!sent) revert TransferFailed();
     }
 
+    /// @notice Handles partial or full repayments from the borrower.
+    /// @dev Routes payments, splitting them into base (principal) and gain (interest), 
+    /// and forwards them to the FundingPool.
     function repay() external payable {
         if (msg.sender != borrower) revert Unauthorized();
         if (status != LoanStatus.Funded && status != LoanStatus.Defaulted) revert InvalidState();
@@ -113,6 +123,8 @@ contract LoanContract {
         IFundingPool(pool).handleRepayment(baseAmount, gainAmount, currentCollateralAmount);
     }
 
+    /// @notice Marks the loan as defaulted if it is overdue.
+    /// @dev Reverts if the current block is before the dueBlock. Notifies the FundingPool.
     function markDefaulted() external onlyPool {
         if (status != LoanStatus.Funded) revert InvalidState();
         if (block.number < dueBlock) revert LoanNotOverdue();
