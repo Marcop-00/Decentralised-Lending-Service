@@ -21,6 +21,48 @@ The system uniquely bridges Ethereum and Bitcoin by using an on-chain Bitcoin or
 
 ## 🏗️ Architecture
 
+```mermaid
+flowchart TD
+    %% Actors
+    Borrower([Borrower])
+    Contributor([Contributor])
+
+    %% Blockchains & On-Chain
+    subgraph Ethereum Blockchain
+        direction TB
+        FundingPool[FundingPool.sol]
+        LoanContract[LoanContract.sol]
+        BitcoinOracle[BitcoinOracle.sol]
+    end
+
+    subgraph Bitcoin Blockchain
+        BTC[(Bitcoin UTXOs)]
+    end
+
+    %% Off-Chain Services
+    subgraph Off-Chain Services (Python)
+        OracleService[Oracle Service]
+        AutoVoter[Auto-Voter]
+    end
+
+    %% Interactions
+    Contributor -- "Deposits/Withdraws ETH" --> FundingPool
+    Borrower -- "Submits Loan Proposal" --> FundingPool
+    Borrower -- "Pays Fee & Requests Update" --> BitcoinOracle
+    
+    FundingPool -- "Creates & Funds" --> LoanContract
+    Borrower -- "Repays Principal + Interest" --> LoanContract
+    LoanContract -- "Returns Funds & Forwards Repayment" --> FundingPool
+
+    BitcoinOracle -- "Emits UpdateRequested Event" --> OracleService
+    OracleService -- "Reads Address Balance" --> BTC
+    OracleService -- "Submits Verified Balance" --> BitcoinOracle
+    
+    FundingPool -- "Reads Validated Balance" --> BitcoinOracle
+    FundingPool -- "Emits LoanProposed Event" --> AutoVoter
+    AutoVoter -- "Automatically Votes 'Yes'" --> FundingPool
+```
+
 ### Smart Contracts
 
 #### 1. **FundingPool.sol** (UUPS Upgradeable)
