@@ -21,46 +21,70 @@ The system uniquely bridges Ethereum and Bitcoin by using an on-chain Bitcoin or
 
 ## 🏗️ Architecture
 
+### 1. System Components
+
 ```mermaid
-flowchart TD
+flowchart LR
     %% Actors
     Borrower([Borrower])
     Contributor([Contributor])
 
-    %% Blockchains & On-Chain
-    subgraph EthereumBlockchain [Ethereum Blockchain]
+    %% Environments
+    subgraph Ethereum [Ethereum Network]
         direction TB
-        FundingPool[FundingPool.sol]
-        LoanContract[LoanContract.sol]
-        BitcoinOracle[BitcoinOracle.sol]
+        FP[[FundingPool.sol]]
+        LC[[LoanContract.sol]]
+        BO[[BitcoinOracle.sol]]
     end
 
-    subgraph BitcoinBlockchain [Bitcoin Blockchain]
+    subgraph Python [Off-Chain Services]
+        direction TB
+        Oracle[Oracle Service]
+        Voter[Auto-Voter Bot]
+    end
+
+    subgraph Bitcoin [Bitcoin Network]
         BTC[(Bitcoin UTXOs)]
     end
 
-    %% Off-Chain Services
-    subgraph OffChainServices [Off-Chain Services Python]
-        OracleService[Oracle Service]
-        AutoVoter[Auto-Voter]
-    end
-
-    %% Interactions
-    Contributor -- "Deposits/Withdraws ETH" --> FundingPool
-    Borrower -- "Submits Loan Proposal" --> FundingPool
-    Borrower -- "Pays Fee & Requests Update" --> BitcoinOracle
+    %% High-level relationships
+    Borrower -->|Interacts| Ethereum
+    Contributor -->|Interacts| Ethereum
+    FP -->|Deploys| LC
     
-    FundingPool -- "Creates & Funds" --> LoanContract
-    Borrower -- "Repays Principal + Interest" --> LoanContract
-    LoanContract -- "Returns Funds & Forwards Repayment" --> FundingPool
+    Python -.->|Listens & Updates| Ethereum
+    Python -.->|Reads| Bitcoin
+```
 
-    BitcoinOracle -- "Emits UpdateRequested Event" --> OracleService
-    OracleService -- "Reads Address Balance" --> BTC
-    OracleService -- "Submits Verified Balance" --> BitcoinOracle
+### 2. Interaction Sequence
+
+```mermaid
+sequenceDiagram
+    actor C as Contributor
+    actor B as Borrower
+    participant FP as FundingPool
+    participant BO as BitcoinOracle
+    participant OS as Python Oracle
+    participant BTC as Bitcoin
+
+    Note over C, FP: 1. Pool Funding
+    C->>FP: Deposit ETH
+
+    Note over B, FP: 2. Loan Proposal
+    B->>FP: createLoanProposal()
     
-    FundingPool -- "Reads Validated Balance" --> BitcoinOracle
-    FundingPool -- "Emits LoanProposed Event" --> AutoVoter
-    AutoVoter -- "Automatically Votes 'Yes'" --> FundingPool
+    Note over B, BTC: 3. Collateral Verification
+    B->>BO: requestUpdate() + Fee
+    BO-->>OS: Emit UpdateRequested
+    OS->>BTC: Query Address UTXOs
+    BTC-->>OS: Return Balance
+    OS->>BO: update(balance)
+
+    Note over B, FP: 4. Execution & Funding
+    B->>FP: executeApprovedLoan()
+    FP->>BO: getBalance()
+    BO-->>FP: Return Validated Balance
+    FP->>FP: Deploy LoanContract & Transfer Funds
 ```
 
 ### Smart Contracts
