@@ -2,6 +2,7 @@ import { expect } from "chai";
 import assert from "assert";
 import hre from "hardhat";
 import helpers from "@nomicfoundation/hardhat-network-helpers";
+import { deployProtocol } from "./helpers/deployProtocol.js";
 
 
 const { ethers, network } = hre;
@@ -11,16 +12,8 @@ describe("FundingPool end-to-end", function () {
   it("contribute -> propose -> vote -> execute -> repay", async function () {
     const [deployer, contributor, borrower] = await ethers.getSigners();
 
-    const minFee = ethers.parseEther("0.001");
-
-    const OracleFactory = await ethers.getContractFactory("BitcoinOracle");
-    const oracle = await OracleFactory.deploy(minFee);
-    await oracle.waitForDeployment();
-
-    const PoolFactory = await ethers.getContractFactory("FundingPool");
-    const pool = await PoolFactory.deploy();
-    await pool.waitForDeployment();
-    await pool.initialize(await oracle.getAddress());
+    const { pool, oracle } = await deployProtocol();
+    const minFee = await oracle.minFee();
 
     // contributor contributes 5 ETH
     await pool.connect(contributor).contribute({ value: ethers.parseEther("5") });

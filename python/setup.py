@@ -29,21 +29,42 @@ def main():
     
     fund_amount = w3.to_wei(100, 'ether')
     
-    # We send funds using the raw RPC method eth_sendTransaction since the private key is in Geth
-    def fund_account(to_address):
-        tx_hash = w3.provider.make_request("eth_sendTransaction", [{
-            "from": PREFUNDED_ADDRESS,
-            "to": to_address,
-            "value": hex(fund_amount)
-        }])
-        return tx_hash['result']
-
-    fund_account(deployer.address)
-    fund_account(contributor.address)
-    fund_account(borrower.address)
+    # Read the keystore to sign offline
+    import glob
+    keystore_files = glob.glob("private-chain/keystore/UTC--*")
+    if not keystore_files:
+        print("❌ Could not find pre-funded account keystore")
+        return
     
-    print("⏳ Waiting for the funding transaction to be mined (about 10 seconds)...")
-    time.sleep(12)
+    with open(keystore_files[0], "r") as f:
+        keyfile = f.read()
+    with open("private-chain/password.txt", "r") as f:
+        pwd = f.read().strip()
+    
+    prefunded_key = w3.eth.account.decrypt(keyfile, pwd)
+    prefunded_account = w3.eth.account.from_key(prefunded_key)
+    
+    base_nonce = w3.eth.get_transaction_count(prefunded_account.address, 'pending')
+    
+    def fund_account(to_address, nonce):
+        tx = {
+            "to": to_address,
+            "value": fund_amount,
+            "nonce": nonce,
+            "gas": 21000,
+            "gasPrice": w3.eth.gas_price,
+            "chainId": 202526
+        }
+        signed_tx = w3.eth.account.sign_transaction(tx, prefunded_key)
+        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+        return tx_hash.hex()
+
+    fund_account(deployer.address, base_nonce)
+    fund_account(contributor.address, base_nonce + 1)
+    last_tx_hash = fund_account(borrower.address, base_nonce + 2)
+    
+    print("⏳ Waiting for the funding transactions to be mined...")
+    w3.eth.wait_for_transaction_receipt(last_tx_hash)
     
     print("\n🚀 Starting contract deployment with the new Deployer account...")
     
@@ -54,7 +75,7 @@ def main():
         
         Contract = w3.eth.contract(abi=artifact['abi'], bytecode=artifact['bytecode'])
         
-        nonce = w3.eth.get_transaction_count(deployer.address)
+        nonce = w3.eth.get_transaction_count(deployer.address, 'pending')
         tx = Contract.constructor(*args).build_transaction({
             'from': deployer.address,
             'nonce': nonce,
@@ -66,27 +87,17 @@ def main():
         tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
         return tx_receipt.contractAddress, artifact['abi']
 
-    # Deploy BitcoinOracle
-    min_fee = w3.to_wei(0.001, 'ether')
-    oracle_address, _ = deploy_contract("BitcoinOracle", min_fee)
+    # Deploy BitcoinOracle. Its minimum update fee is fixed in the contract as
+    # the update gas estimate times 0.1 gwei, as required by the trace.
+    oracle_address, _ = deploy_contract("BitcoinOracle")
     print(f"✅ BitcoinOracle deployed at: {oracle_address}")
 
-    # Deploy FundingPool
-    pool_address, pool_abi = deploy_contract("FundingPool")
-    print(f"✅ FundingPool deployed at: {pool_address}")
-
-    # Initialize FundingPool
-    Pool = w3.eth.contract(address=pool_address, abi=pool_abi)
-    nonce = w3.eth.get_transaction_count(deployer.address)
-    init_tx = Pool.functions.initialize(oracle_address).build_transaction({
-        'from': deployer.address,
-        'nonce': nonce,
-        'gasPrice': w3.eth.gas_price
-    })
-    signed_init_tx = w3.eth.account.sign_transaction(init_tx, private_key=deployer.key)
-    w3.eth.send_raw_transaction(signed_init_tx.raw_transaction)
-    w3.eth.wait_for_transaction_receipt(signed_init_tx.hash)
-    print("✅ FundingPool initialized")
+    # Deploy the UUPS implementation and its ERC-1967 proxy. The proxy
+    # constructor initialises the pool atomically, so no account can take it over.
+    implementation_address, pool_abi = deploy_contract("FundingPool")
+    pool_address, _ = deploy_contract("FundingPoolProxy", implementation_address, oracle_address)
+    print(f"✅ FundingPool implementation deployed at: {implementation_address}")
+    print(f"✅ FundingPool proxy deployed and initialized at: {pool_address}")
 
     print("\n⚙️  Automatic generation of .env files...")
     env_content = f"""ETH_RPC_URL=http://127.0.0.1:8545

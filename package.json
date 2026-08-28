@@ -4,9 +4,7 @@
   "private": true,
   "scripts": {
     "clean": "hardhat clean",
-    "check:network": "node scripts/checkNetworkConfig.js",
     "compile": "hardhat compile",
-    "fund:account": "node scripts/fundAccount.js",
     "test": "hardhat test",
     "node": "hardhat node"
   },

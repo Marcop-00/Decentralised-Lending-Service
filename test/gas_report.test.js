@@ -2,6 +2,7 @@ import { expect } from "chai";
 import assert from "assert";
 import hre from "hardhat";
 import helpers from "@nomicfoundation/hardhat-network-helpers";
+import { deployProtocol } from "./helpers/deployProtocol.js";
 
 const { ethers, network } = hre;
 const { time } = helpers;
@@ -9,16 +10,8 @@ const { time } = helpers;
 describe("Gas report sanity checks", function () {
   it("runs the main operations and stores gas data", async function () {
     const [deployer, contributor, borrower] = await ethers.getSigners();
-    const minFee = ethers.parseEther("0.001");
-
-    const Oracle = await ethers.getContractFactory("BitcoinOracle");
-    const oracle = await Oracle.deploy(minFee);
-    await oracle.waitForDeployment();
-
-    const PoolFactory = await ethers.getContractFactory("FundingPool");
-    const pool = await PoolFactory.deploy();
-    await pool.waitForDeployment();
-    await pool.initialize(await oracle.getAddress());
+    const { pool, oracle } = await deployProtocol();
+    const minFee = await oracle.minFee();
 
     const depositAmount = ethers.parseEther("2");
     const tx1 = await pool.connect(contributor).contribute({ value: depositAmount });

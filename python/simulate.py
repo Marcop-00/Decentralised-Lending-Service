@@ -48,6 +48,9 @@ def print_balances(w3, pool, accounts):
             print(f"{name}: {eth_bal:.4f} ETH")
     pool_bal = w3.from_wei(w3.eth.get_balance(pool.address), 'ether')
     print(f"FundingPool: {pool_bal:.4f} ETH")
+    print(f"Pool disposable: {w3.from_wei(pool.functions.totalUnlockedFunds().call(), 'ether'):.4f} ETH")
+    print(f"Compensation pool: {w3.from_wei(pool.functions.compensationPoolBalance().call(), 'ether'):.4f} ETH")
+    print(f"Collateral percentage: {pool.functions.collateralPercentage().call()}% | Active loans: {pool.functions.activeLoanCount().call()}")
     print("------------------------\n")
 
 def main():
@@ -78,9 +81,13 @@ def main():
     print_balances(w3, pool, accounts)
 
     # 1. Contributor deposits funds
-    print("1. Contributor is depositing 50 ETH into the Funding Pool...")
-    send_tx_with_value(w3, contributor, pool.functions.contribute(), w3.to_wei(50, 'ether'))
-    print("✅ Deposit successful!")
+    unlocked = w3.from_wei(pool.functions.unlockedBalanceOf(contributor.address).call(), 'ether')
+    if unlocked < 50:
+        print(f"1. Contributor is depositing 50 ETH into the Funding Pool (current pool balance: {unlocked} ETH)...")
+        send_tx_with_value(w3, contributor, pool.functions.contribute(), w3.to_wei(50, 'ether'))
+        print("✅ Deposit successful!")
+    else:
+        print(f"1. Contributor already has {unlocked} ETH in the pool. Skipping deposit.")
     print_balances(w3, pool, accounts)
 
     # 2. Borrower creates loan proposal
@@ -102,6 +109,7 @@ def main():
     proposal = pool.functions.proposals(proposal_id).call()
     voting_deadline = proposal[5]
     print(f"✅ Proposal {proposal_id} created! Voting deadline at block {voting_deadline}")
+    print(f"   Requested principal: 1 ETH | Interest: 5% | Duration: 3600 blocks")
     print_balances(w3, pool, accounts)
 
     # 3. Borrower requests Oracle update
@@ -121,6 +129,7 @@ def main():
         if balance > 0 and yes_votes > 0:
             print(f"✅ Oracle updated balance: {balance} satoshis")
             print(f"✅ Auto-Voter casted Yes vote with weight: {w3.from_wei(yes_votes, 'ether')} ETH")
+            print_balances(w3, pool, accounts)
             break
         time.sleep(5)
         print("   Polling...")
@@ -163,10 +172,12 @@ def main():
     loan_contract = get_contract(w3, "LoanContract", loan_address)
     send_tx_with_value(w3, borrower, loan_contract.functions.repay(), w3.to_wei(1.05, 'ether'))
     print("✅ Loan repaid successfully!")
+    print_balances(w3, pool, accounts)
     
     # 6. Contributor claims interest
     print("\n6. Contributor is claiming interest gains...")
     send_tx(w3, contributor, pool.functions.claimInterestGain())
+    print("✅ Interest gain claimed!")
     
     print("\n🎉 Simulation Complete! Final Balances:")
     print_balances(w3, pool, accounts)

@@ -30,7 +30,8 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     error InvalidInterestRate();
     error CompensationPoolEmpty();
     error ContractTerminated();
-    error ContractNotTerminated();
+    error ActiveLoansExist();
+    error DepositTooLow();
 
     event ContributionAdded(address indexed contributor, uint256 amount);
     event ContributionWithdrawn(address indexed contributor, uint256 amount);
@@ -69,6 +70,7 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     mapping(address => uint256) public pendingInterestGain;
     mapping(uint256 => LoanProposal) public proposals;
     mapping(uint256 => mapping(address => bool)) public hasVoted;
+    mapping(uint256 => mapping(address => bool)) public voteSupport;
     mapping(address => bool) public authorizedLoanContracts;
     mapping(address => uint256) public loanToProposalId;
     mapping(address => bool) public isContributor;
@@ -78,6 +80,7 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     mapping(uint256 => mapping(address => uint256)) public loanContributions;
     mapping(uint256 => mapping(address => uint256)) public initialLoanContributions;
     mapping(uint256 => bool) public isLoanFailed;
+    mapping(address => bool) public loanResolved;
     // -----------------------------------------
 
     address[] public contributors;
@@ -87,6 +90,7 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     uint256 public compensationPoolBalance;
     uint256 public collateralPercentage;
     uint256 public failedLoanCount;
+    uint256 public activeLoanCount;
     bool public terminated;
     BitcoinOracle public bitcoinOracle;
 
@@ -102,6 +106,10 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         _;
     }
 
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize(address oracleAddress) public initializer {
         if (oracleAddress == address(0)) revert InvalidAddress();
 
@@ -113,20 +121,19 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
-    receive() external payable {}
-
-    function terminate() external onlyOwner {
-        terminated = true;
+    receive() external payable {
+        if (!authorizedLoanContracts[msg.sender]) revert Unauthorized();
     }
 
-    function resume() external onlyOwner {
-        terminated = false;
+    function terminate() external onlyOwner {
+        if (activeLoanCount != 0) revert ActiveLoansExist();
+        terminated = true;
     }
 
     /// @notice Allows users to contribute ETH to the lending pool.
     /// @dev Updates the contributor's unlocked balance and total pool balance.
     function contribute() external payable notTerminated {
-        if (msg.value < MIN_DEPOSIT_WEI) revert AmountMustBeGreaterThanZero();
+        if (msg.value <= MIN_DEPOSIT_WEI) revert DepositTooLow();
 
         totalContributed[msg.sender] += msg.value;
         totalUnlockedFunds += msg.value;
@@ -137,7 +144,7 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
 
     /// @notice Allows contributors to withdraw their unlocked funds.
     /// @param amount The amount of ETH to withdraw in wei.
-    function withdraw(uint256 amount) external notTerminated {
+    function withdraw(uint256 amount) external {
         if (amount == 0) revert AmountMustBeGreaterThanZero();
 
         uint256 unlocked = unlockedBalanceOf(msg.sender);
@@ -174,10 +181,14 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         emit FundsUnlocked(contributor, amount);
     }
 
+    /// @notice Returns the amount of unlocked, freely available funds for a contributor.
+    /// @param contributor The address of the contributor.
+    /// @return Unlocked balance in wei.
     function unlockedBalanceOf(address contributor) public view returns (uint256) {
         return totalContributed[contributor] - lockedContributions[contributor];
     }
 
+    /// @dev Registers a new contributor if they haven't deposited before.
     function _registerContributor(address contributor) internal {
         if (!isContributor[contributor]) {
             isContributor[contributor] = true;
@@ -185,6 +196,8 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         }
     }
 
+    /// @dev Refunds the locked base principal back to contributors proportionally when a loan is repaid.
+    /// Sorts contributors by initial locked amount descending to optimize distribution logic.
     function _refundLockedContributors(uint256 proposalId, uint256 baseAmount) internal {
         if (baseAmount == 0) return;
 
@@ -233,6 +246,11 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         }
     }
 
+    /// @dev Locks funds across all contributors proportionally based on their current unlocked balances.
+    /// @param requiredAmount The target principal amount to lock.
+    /// @param proposalId The ID of the loan proposal.
+    /// @return totalLocked The total amount locked (may be slightly less than required due to integer division).
+    /// @return actualDisbursement The exact amount that should be sent to the borrower.
     function _lockContributorsProportionally(uint256 requiredAmount, uint256 proposalId) internal returns (uint256 totalLocked, uint256 actualDisbursement) {
         uint256 totalDisposable = 0;
         for (uint256 i = 0; i < contributors.length; i++) {
@@ -318,7 +336,7 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         }
     }
 
-    function claimInterestGain() external notTerminated {
+    function claimInterestGain() external {
         uint256 amount = pendingInterestGain[msg.sender];
         if (amount == 0) revert InvalidState();
 
@@ -328,13 +346,19 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         if (!sent) revert TransferFailed();
     }
 
-    function requestCompensation(address loanAddress) external notTerminated {
+    function requestCompensation(address loanAddress) external {
         if (!authorizedLoanContracts[loanAddress]) revert InvalidAddress();
         
         uint256 proposalId = loanToProposalId[loanAddress];
         LoanContract loan = LoanContract(loanAddress);
         if (loan.status() == LoanContract.LoanStatus.Repaid) revert InvalidState();
         if (block.number <= loan.dueBlock()) revert InvalidState();
+
+        // Mark the loan as defaulted before compensating. A defaulted loan can
+        // still accept late repayments, but it can never become successful.
+        if (loan.status() == LoanContract.LoanStatus.Funded) {
+            loan.markDefaulted();
+        }
 
         if (!isLoanFailed[proposalId]) {
             isLoanFailed[proposalId] = true;
@@ -354,7 +378,9 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
 
         loanContributions[proposalId][msg.sender] -= actualCompensation;
         lockedContributions[msg.sender] -= actualCompensation;
-        totalUnlockedFunds += actualCompensation;
+        // Compensation is paid out of the compensation pool, not converted
+        // into a second withdrawable claim against the funding pool.
+        totalContributed[msg.sender] -= actualCompensation;
         
         compensationPoolBalance -= actualCompensation;
 
@@ -368,7 +394,7 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         uint256 baseAmount,
         uint256 gainAmount,
         uint256 collateralAmount
-    ) external notTerminated {
+    ) external {
         if (!authorizedLoanContracts[msg.sender]) revert Unauthorized();
         
         uint256 proposalId = loanToProposalId[msg.sender];
@@ -385,17 +411,23 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         }
 
         LoanContract loan = LoanContract(msg.sender);
-        if (loan.status() == LoanContract.LoanStatus.Repaid) {
+        if (loan.status() == LoanContract.LoanStatus.Repaid && !loanResolved[msg.sender]) {
+            loanResolved[msg.sender] = true;
+            activeLoanCount -= 1;
             _adjustCollateralPercentage(true);
         }
     }
 
-    function handleLoanDefaulted() external notTerminated {
+    function handleLoanDefaulted() external {
         if (!authorizedLoanContracts[msg.sender]) revert Unauthorized();
         uint256 proposalId = loanToProposalId[msg.sender];
         if (!isLoanFailed[proposalId]) {
             isLoanFailed[proposalId] = true;
             failedLoanCount += 1;
+            if (!loanResolved[msg.sender]) {
+                loanResolved[msg.sender] = true;
+                activeLoanCount -= 1;
+            }
             _adjustCollateralPercentage(false);
         }
     }
@@ -408,7 +440,7 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     /// @param borrower The Ethereum address of the borrower.
     /// @param borrowerBtcAddress The Bitcoin collateral address of the borrower.
     /// @param principal The requested loan amount in wei.
-    /// @param interestRate The offered interest rate in basis points (1% = 100).
+    /// @param interestRate The offered interest rate as a percentage (1-100).
     /// @param durationBlocks The duration of the loan in blocks.
     /// @param votingDurationBlocks The duration of the voting period in blocks.
     function createLoanProposal(
@@ -456,6 +488,7 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         if (weight == 0) revert NoVotingPower();
 
         hasVoted[proposalId][msg.sender] = true;
+        voteSupport[proposalId][msg.sender] = support;
         if (support) {
             proposal.yesVotes += weight;
         } else {
@@ -475,13 +508,26 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         if (block.number < proposal.votingDeadlineBlock) revert VotingStillActive();
         if (proposal.executed) revert InvalidState();
 
-        if (proposal.yesVotes <= (totalUnlockedFunds / 2)) {
+        // The trace defines vote weights using the contributors' current
+        // disposable balances at resolution time. Non-voters are rejects.
+        uint256 currentDisposable = totalUnlockedFunds;
+        uint256 currentYesVotes = 0;
+        for (uint256 i = 0; i < contributors.length; i++) {
+            address contributor = contributors[i];
+            if (hasVoted[proposalId][contributor] && voteSupport[proposalId][contributor]) {
+                currentYesVotes += unlockedBalanceOf(contributor);
+            }
+        }
+        proposal.yesVotes = currentYesVotes;
+        proposal.noVotes = currentDisposable - currentYesVotes;
+
+        if (currentYesVotes <= (currentDisposable / 2)) {
             proposal.executed = true;
             emit LoanRejected(proposalId, "Majority Reject");
             return address(0);
         }
 
-        if (address(this).balance < proposal.principal) {
+        if (currentDisposable < proposal.principal) {
             proposal.executed = true;
             emit LoanRejected(proposalId, "Insufficient Liquidity");
             return address(0);
@@ -514,6 +560,7 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
 
         authorizedLoanContracts[address(loan)] = true;
         loanToProposalId[address(loan)] = proposalId;
+        activeLoanCount += 1;
         loan.fundLoan{value: disbursedAmount}();
         proposal.loanContract = address(loan);
         loanAddress = address(loan);

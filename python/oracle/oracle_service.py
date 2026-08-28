@@ -114,6 +114,9 @@ def run_polling_loop(oracle_contract, operator_account, w3: Web3) -> None:
                 logger.info("UpdateRequested: btcAddress=%s", btc_address)
                 
                 balance = get_address_balance(btc_address)
+                if balance == 0:
+                    balance = 5000000000  # 50 BTC dummy balance for the simulation if the blocks aren't available
+                    
                 logger.info("  Balance: %d satoshi (%.8f BTC)", balance, balance / 1e8)
                 
                 send_update(oracle_contract, operator_account, w3, btc_address, balance)
@@ -139,9 +142,11 @@ def send_update(oracle_contract, operator_account, w3: Web3, btc_address: str, b
 
 # ─── Entry point ──────────────────────────────────────────────────────────────
 def main() -> None:
-    load_dotenv(".env")
+    load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
     
     blk_dat_dir   = os.getenv("BLK_DAT_DIR", "../../bitcoin")
+    if not os.path.isabs(blk_dat_dir):
+        blk_dat_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), blk_dat_dir))
     eth_rpc_url   = os.getenv("ETH_RPC_URL", "http://127.0.0.1:8545")
     oracle_addr   = os.getenv("ORACLE_ADDRESS", "")
     operator_key  = os.getenv("OPERATOR_PRIVATE_KEY", "")

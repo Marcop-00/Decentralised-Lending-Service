@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import hre from "hardhat";
 import helpers from "@nomicfoundation/hardhat-network-helpers";
+import { deployProtocol } from "./helpers/deployProtocol.js";
 
 const { ethers, network } = hre;
 const { time } = helpers;
@@ -12,17 +13,7 @@ describe("Gas Profiling Evaluation", function () {
   before(async function () {
     [deployer, contributor, borrower] = await ethers.getSigners();
     
-    // Deploy Oracle
-    const minFee = ethers.parseEther("0.001");
-    const OracleFactory = await ethers.getContractFactory("BitcoinOracle");
-    oracle = await OracleFactory.deploy(minFee);
-    await oracle.waitForDeployment();
-
-    // Deploy FundingPool
-    const PoolFactory = await ethers.getContractFactory("FundingPool");
-    pool = await PoolFactory.deploy();
-    await pool.waitForDeployment();
-    await pool.initialize(await oracle.getAddress());
+    ({ pool, oracle } = await deployProtocol());
   });
 
   it("Should measure and log gas costs for main operations", async function () {
@@ -57,11 +48,15 @@ describe("Gas Profiling Evaluation", function () {
     console.log(`voteOnProposal() gas used: ${receipt.gasUsed}`);
 
     // Oracle Update (Setup for execution)
-    const minFee = ethers.parseEther("0.001");
+    const minFee = await oracle.minFee();
     // 1. The borrower requests the update by paying the fee
-    await oracle.connect(borrower).requestUpdate("tb1qtestaddress", { value: minFee });
+    tx = await oracle.connect(borrower).requestUpdate("tb1qtestaddress", { value: minFee });
+    receipt = await tx.wait();
+    console.log(`requestUpdate() gas used: ${receipt.gasUsed}`);
     // 2. The oracle updates the data off-chain
-    await oracle.connect(deployer).update("tb1qtestaddress", 100n * 100_000_000n);
+    tx = await oracle.connect(deployer).update("tb1qtestaddress", 100n * 100_000_000n);
+    receipt = await tx.wait();
+    console.log(`update() gas used: ${receipt.gasUsed}`);
 
     // Mine blocks to pass the voting deadline
     for (let i = 0; i < 12; i++) {
@@ -84,6 +79,10 @@ describe("Gas Profiling Evaluation", function () {
     tx = await loan.connect(borrower).repay({ value: due });
     receipt = await tx.wait();
     console.log(`repay() gas used: ${receipt.gasUsed}`);
+
+    tx = await pool.connect(contributor).claimInterestGain();
+    receipt = await tx.wait();
+    console.log(`claimInterestGain() gas used: ${receipt.gasUsed}`);
     console.log("------------------------------\n");
   });
 });

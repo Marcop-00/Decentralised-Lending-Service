@@ -2,6 +2,7 @@ import { expect } from "chai";
 import assert from "assert";
 import hre from "hardhat";
 import helpers from "@nomicfoundation/hardhat-network-helpers";
+import { deployProtocol } from "./helpers/deployProtocol.js";
 
 const { ethers } = hre;
 
@@ -12,15 +13,7 @@ describe("Security and Edge Cases", function () {
   beforeEach(async function () {
     [deployer, attacker, borrower] = await ethers.getSigners();
     
-    const minFee = ethers.parseEther("0.001");
-    const OracleFactory = await ethers.getContractFactory("BitcoinOracle");
-    oracle = await OracleFactory.deploy(minFee);
-    await oracle.waitForDeployment();
-
-    const PoolFactory = await ethers.getContractFactory("FundingPool");
-    pool = await PoolFactory.deploy();
-    await pool.waitForDeployment();
-    await pool.initialize(await oracle.getAddress());
+    ({ pool, oracle } = await deployProtocol());
   });
 
   describe("BitcoinOracle Access Control", function () {

@@ -17,7 +17,8 @@ from dotenv import load_dotenv
 from web3 import Web3
 from web3.exceptions import ContractLogicError
 
-load_dotenv(".env")
+ENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
+load_dotenv(ENV_PATH)
 
 # ─── Logging Configuration ───────────────────────────────────────────────────
 logging.basicConfig(
@@ -41,7 +42,7 @@ ABI_PATH = os.path.join(
 )
 
 # ─── Voting Function ────────────────────────────────────────────────────────
-def evaluate_and_vote(pool_contract, voter_account, w3, proposal_id, principal, interest_bps, duration_blocks):
+def evaluate_and_vote(pool_contract, voter_account, w3, proposal_id, principal, interest_rate, duration_blocks):
     """
     Evaluates parameters and sends the voting transaction.
     """
@@ -95,7 +96,7 @@ def run_polling_loop(pool_contract, voter_account, w3):
     logger.info(f"Starting from block: {last_checked_block}")
 
     # We get the event signature (topic) to filter it
-    event_signature = w3.keccak(text="LoanProposed(uint256,address,string,uint256,uint256,uint256,uint256)").hex()
+    event_signature = "0x" + w3.keccak(text="LoanProposed(uint256,address,string,uint256,uint256,uint256,uint256)").hex()
 
     while True:
         time.sleep(POLL_INTERVAL)
@@ -123,16 +124,16 @@ def run_polling_loop(pool_contract, voter_account, w3):
                 proposal_id = args["proposalId"]
                 borrower = args["borrower"]
                 principal = args["principal"]
-                interest_bps = args["interestBps"]
+                interest_rate = args["interestRate"]
                 duration_blocks = args["durationBlocks"]
                 
                 principal_eth = w3.from_wei(principal, 'ether')
                 
                 logger.info("--- NEW PROPOSAL DETECTED ---")
                 logger.info(f"ID: {proposal_id} | Da: {borrower}")
-                logger.info(f"Request: {principal_eth} ETH | Interest: {interest_bps} bps | Duration: {duration_blocks} blocks")
+                logger.info(f"Request: {principal_eth} ETH | Interest: {interest_rate}% | Duration: {duration_blocks} blocks")
                 
-                evaluate_and_vote(pool_contract, voter_account, w3, proposal_id, principal, interest_bps, duration_blocks)
+                evaluate_and_vote(pool_contract, voter_account, w3, proposal_id, principal, interest_rate, duration_blocks)
 
         except Exception as e:
             logger.error(f"Polling loop error: {e}. Retrying in {POLL_INTERVAL} seconds...")
@@ -146,7 +147,7 @@ if __name__ == "__main__":
         logger.error("Failed to connect to Ethereum node. Ensure Hardhat or Geth is running.")
         exit(1)
         
-    if POOL_ADDRESS == "0x..." or VOTER_PRIVATE_KEY == "0x...":
+    if not POOL_ADDRESS or not VOTER_PRIVATE_KEY or POOL_ADDRESS == "0x..." or VOTER_PRIVATE_KEY == "0x...":
         logger.error("You must configure POOL_ADDRESS and VOTER_PRIVATE_KEY in the script or in the .env file!")
         exit(1)
 

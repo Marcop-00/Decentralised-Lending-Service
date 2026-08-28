@@ -40,6 +40,13 @@ contract LoanContract {
         _;
     }
 
+    /// @notice Initializes the loan contract parameters.
+    /// @param poolAddress Address of the managing FundingPool.
+    /// @param borrowerAddress Address of the loan applicant.
+    /// @param principalAmount Total requested loan in wei.
+    /// @param loanInterestRate Interest rate percentage (e.g. 5 for 5%).
+    /// @param durationBlocks Number of blocks before the loan is considered overdue.
+    /// @param loanCollateralPercentage Percentage of interest redirected to the compensation pool.
     constructor(
         address poolAddress,
         address borrowerAddress,
@@ -66,6 +73,8 @@ contract LoanContract {
         return principal + totalInterestAmount();
     }
 
+    /// @notice Calculates the total interest amount to be paid on the principal.
+    /// @return Total interest in wei.
     function totalInterestAmount() public view returns (uint256) {
         return (principal * interestRate) / 100;
     }
@@ -113,7 +122,12 @@ contract LoanContract {
 
         if (repaidPrincipal == principal && repaidInterest == expectedInterest) {
             if (status == LoanStatus.Funded) {
-                status = LoanStatus.Repaid;
+                if (block.number > dueBlock) {
+                    status = LoanStatus.Defaulted;
+                    IFundingPool(pool).handleLoanDefaulted();
+                } else {
+                    status = LoanStatus.Repaid;
+                }
             }
         }
 
@@ -124,10 +138,10 @@ contract LoanContract {
     }
 
     /// @notice Marks the loan as defaulted if it is overdue.
-    /// @dev Reverts if the current block is before the dueBlock. Notifies the FundingPool.
-    function markDefaulted() external onlyPool {
+    /// @dev Reverts if the current block is before or equal to the dueBlock. Notifies the FundingPool.
+    function markDefaulted() external {
         if (status != LoanStatus.Funded) revert InvalidState();
-        if (block.number < dueBlock) revert LoanNotOverdue();
+        if (block.number <= dueBlock) revert LoanNotOverdue();
 
         status = LoanStatus.Defaulted;
         IFundingPool(pool).handleLoanDefaulted();

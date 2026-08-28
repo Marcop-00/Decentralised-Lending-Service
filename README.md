@@ -89,7 +89,7 @@ sequenceDiagram
 
 ### Smart Contracts
 
-#### 1. **FundingPool.sol** (UUPS Upgradeable)
+#### 1. **FundingPool.sol** + **FundingPoolProxy.sol** (UUPS Upgradeable)
 The central hub managing loans, contributions, and voting.
 
 **Core Functions:**
@@ -101,11 +101,11 @@ The central hub managing loans, contributions, and voting.
 - `requestCompensation()` - Contributors claim compensation from failed loans
 
 **Key Features:**
-- **Voting Mechanism:** Voting period = 12 blocks; approval requires Yes votes > 50% of total pool unlocked funds (non-voters count as implicit rejects)
+- **Voting Mechanism:** Voting period = 12 blocks; at resolution, votes are weighted by the contributors' current disposable balances and non-voters count as implicit rejects.
 - **Interest Distribution:** Loan interest split between gains and collateral pool (default 50/50)
 - **Compensation Pool:** Accumulates collateral from loan failures. Targeted compensation requests forfeit future loan repayments.
 - **Collateral Requirement:** Borrowers must have Bitcoin balance ≥ principal / 30 BTC
-- **Termination Logic:** Pool can be terminated after all loans resolved; funds returned to contributors
+- **Termination Logic:** The owner can terminate only when no active loan remains; contributors can still withdraw their unlocked capital and claim accrued interest.
 
 #### 2. **LoanContract.sol**
 Individual loan contract deployed for each approved proposal.
@@ -143,7 +143,7 @@ Bridges Bitcoin and Ethereum by tracking Bitcoin address balances.
 5. FundingPool reads balance via `getBalance(btcAddress)`
 
 **Fee Model:**
-- Configurable minimum fee (default: 0.001 ETH)
+- Fixed minimum fee: the measured 48,799-gas `update()` cost multiplied by 0.1 gwei (`0.0000048799 ETH`)
 - Paid by borrower requesting collateral verification
 
 ## 🔧 Technology Stack
@@ -183,50 +183,55 @@ Bridges Bitcoin and Ethereum by tracking Bitcoin address balances.
 ### 1. Installation
 
 ```bash
-# Install Node dependencies
-npm install
-
-# Install Python dependencies
-pip install web3 python-dotenv
+# Esegui lo script di setup che installerà npm, configurerà il .venv e compilerà i contratti
+./setup.sh
 ```
 
 ### 2. Start Private Blockchain
 
 ```bash
-# Terminal 1: Start Geth node
+# Terminal 1: initialise and start Geth. The prefunded account MUST be unlocked to act as the PoA block miner.
 cd private-chain
-./geth --datadir=./data --http --http.addr=127.0.0.1 --http.port=8545 \
-  --networkid=202526 --authrpc.port=8551 --http.api=eth,net,web3 &
+./geth --datadir=./data init project2526genesis.json
+./geth --datadir=./data --keystore=./keystore --networkid=202526 --http --http.addr=127.0.0.1 \
+  --http.port=8545 --http.api=eth,net,web3 --mine --miner.etherbase=d278d247a52c550508ea2b2c9321d816238fb523 \
+  --unlock d278d247a52c550508ea2b2c9321d816238fb523 --password password.txt \
+  --allow-insecure-unlock --ipcdisable
 ```
 
 ### 3. Deploy Contracts
 
 ```bash
 # Terminal 2: Deploy to private network
-python python/setup.py
+./.venv/bin/python python/setup.py
 ```
 
 This will:
 - Generate random accounts for deployer, contributor, and borrower
 - Fund them from pre-funded Geth account
-- Deploy BitcoinOracle and FundingPool contracts
+- Deploy BitcoinOracle, FundingPool implementation and initialized ERC-1967 proxy
 - Generate `.env` file with contract addresses
 
 ### 4. Run Python Services (Optional)
 
 ```bash
 # Terminal 3: Run Bitcoin Oracle
-python python/oracle/oracle_service.py
+./.venv/bin/python python/oracle/oracle_service.py
+```
 
+> **Note on Bitcoin UTXO Sync**: The oracle is programmed to parse the raw Bitcoin blockchain (the first 131,000 blocks) exactly as required by the trace. 
+> To enable real data parsing, drop `blk00000.dat` and `blk00001.dat` into a `bitcoin/` folder in the project root. If the folder is missing, the oracle will gracefully skip the heavy sync phase and inject a mock balance so you can still test the lending flow seamlessly!
+
+```bash
 # Terminal 4: Run Auto-Voter
-python python/voter/auto_voter.py
+./.venv/bin/python python/voter/auto_voter.py
 ```
 
 ### 5. Simulate Lending Flow
 
 ```bash
-# Terminal 5: Run simulation
-python python/simulate.py
+# Terminal 5: Run full simulation
+./.venv/bin/python python/simulate.py
 ```
 
 ## 📊 Lending Flow Example
@@ -451,7 +456,7 @@ VOTER_PRIVATE_KEY=0x...
 ## 📝 Configuration
 
 ### FundingPool Constants
-- `BTC_TO_ETH_RATE` = 30 (1 ETH = 30 BTC for collateral calculation)
+- `BTC_TO_ETH_RATE` = 30 (1 BTC = 30 ETH for collateral calculation)
 - `SATS_PER_BTC` = 100,000,000
 - `MIN_DEPOSIT_WEI` = 100,000 wei
 - `PROPOSAL_VOTING_PERIOD_BLOCKS` = 12 blocks

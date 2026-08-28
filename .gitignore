@@ -20,3 +20,8 @@ data/keystore/*
 private-chain/data/
 private-chain/geth
 *.tar.gz
+
+# LaTeX build intermediates
+*.aux
+*.log
+*.out
