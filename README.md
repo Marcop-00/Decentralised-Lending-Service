@@ -28,19 +28,19 @@ flowchart TD
     Contributor([Contributor])
 
     %% Blockchains & On-Chain
-    subgraph Ethereum Blockchain
+    subgraph EthereumBlockchain [Ethereum Blockchain]
         direction TB
         FundingPool[FundingPool.sol]
         LoanContract[LoanContract.sol]
         BitcoinOracle[BitcoinOracle.sol]
     end
 
-    subgraph Bitcoin Blockchain
+    subgraph BitcoinBlockchain [Bitcoin Blockchain]
         BTC[(Bitcoin UTXOs)]
     end
 
     %% Off-Chain Services
-    subgraph Off-Chain Services (Python)
+    subgraph OffChainServices [Off-Chain Services Python]
         OracleService[Oracle Service]
         AutoVoter[Auto-Voter]
     end
@@ -389,33 +389,28 @@ REPORT_GAS=true npx hardhat test
 ## 🔄 Key Workflow Diagrams
 
 ### Voting Mechanism
-```
-┌─────────────┐
-│   Propose   │ → [Voting Period: 12 blocks]
-└─────────────┘
-      ↓
-┌─────────────────────────────────┐
-│ Contributors Vote (Weighted)    │
-│ - Yes votes > 50% of total pool │
-│ - Non-voters = implicit reject  │
-└─────────────────────────────────┘
-      ↓
-┌─────────────────────────────────┐
-│ Execution (If Approved)         │
-│ - Create LoanContract           │
-│ - Fund borrower with principal  │
-└─────────────────────────────────┘
+```mermaid
+flowchart TD
+    Propose([Propose Loan]) -->|Voting Period: 12 blocks| Vote[Contributors Vote]
+    Vote -->|Yes votes > 50% of total pool| Execution[Execution If Approved]
+    Vote -.->|Non-voters = implicit reject| Execution
+    Execution --> CreateLC[Create LoanContract]
+    Execution --> FundBorrower[Fund borrower with principal]
 ```
 
 ### Interest Distribution
-```
-Loan Repayment (1.05 ETH)
-      ↓
-Principal (1.00 ETH) → Pool Reserve
-      ↓
-Interest (0.05 ETH) → Split 50/50
-  ├─ Collateral (0.025 ETH) → Compensation Pool
-  └─ Gain (0.025 ETH) → Contributor Distribution
+```mermaid
+flowchart LR
+    Repay([Loan Repayment: 1.05 ETH]) --> Principal[Principal: 1.00 ETH]
+    Repay --> Interest[Interest: 0.05 ETH]
+    
+    Principal --> Reserve[(Pool Reserve)]
+    
+    Interest -->|Split 50/50| Collateral[Collateral: 0.025 ETH]
+    Interest -->|Split 50/50| Gain[Gain: 0.025 ETH]
+    
+    Collateral --> CompPool[(Compensation Pool)]
+    Gain --> ContribDist([Contributor Distribution])
 ```
 
 ## 🚨 Environment Variables
