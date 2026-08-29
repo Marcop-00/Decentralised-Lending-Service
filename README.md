@@ -180,14 +180,17 @@ Bridges Bitcoin and Ethereum by tracking Bitcoin address balances.
 
 ## 🚀 Quick Start
 
-> [!IMPORTANT]
-> **Prerequisite — Geth binary**: the `private-chain/geth` executable is excluded from version control (it is a 42 MB macOS binary). Before running the private chain you must place the compiled Geth binary at `private-chain/geth`.
-> A compatible build is included in the submission zip. Alternatively, compile from the official Go-Ethereum repository (same version used during development: `v1.13.x` for macOS ARM64).
+> [!NOTE]
+> **Geth binary**: `setup.sh` automatically downloads the pinned Geth v1.13.14 build
+> for your OS and architecture (macOS/Linux × amd64/arm64) into `private-chain/geth`.
+> No manual installation required. Pinned to v1.13.x because v1.14+ removed
+> Clique PoA, `--unlock` and `--allow-insecure-unlock`.
 
 ### 1. Installation
 
 ```bash
-# Installs npm deps, creates the Python venv and compiles the contracts
+# Installs npm deps, creates the Python venv, compiles the contracts
+# and auto-downloads the Geth binary for your platform
 ./setup.sh
 ```
 
@@ -216,17 +219,38 @@ This will:
 - Deploy BitcoinOracle, FundingPool implementation and initialized ERC-1967 proxy
 - Generate `.env` files under `python/`, `python/oracle/` and `python/voter/`
 
-### 4. Run Python Services (Optional)
+### 4. Run Python Services
+
+#### 4a. Bitcoin Oracle (requires `blk*.dat` files)
+
+The off-chain oracle service is **required** by the project specification (§1.4). It reads the first 131,000 Bitcoin mainnet blocks, builds an in-memory UTXO set, and responds to on-chain `UpdateRequested` events by publishing verified Bitcoin address balances to the `BitcoinOracle` contract.
+
+> [!WARNING]
+> **Bitcoin UTXO sync is required.** Place the `blk00000.dat` and `blk00001.dat` files (containing the first 131,000 Bitcoin mainnet blocks, as provided in the course material) into a `bitcoin/` directory at the project root before starting the oracle. 
+> 
+> *Important: If you extract these files yourself from a modern Bitcoin Core node (v0.21+), they are XOR-encrypted by default and must be decrypted before use.*
+
+The directory should look like:
+```
+bitcoin/
+├── blk00000.dat   (~128 MB)
+└── blk00001.dat   (~128 MB)
+```
+
+> [!NOTE]
+> The oracle performs a **two-pass** canonical-chain sort before processing (Bitcoin Core writes blocks out of order). The first sync of 131,000 blocks takes a few minutes. Progress is logged every 10,000 blocks.
 
 ```bash
-# Terminal 3: Run Bitcoin Oracle
+# Terminal 3: Start the oracle
 ./.venv/bin/python python/oracle/oracle_service.py
 ```
 
-> **Bitcoin UTXO sync is required for the full simulation.** Put the `blk*.dat` files containing the first 131,000 Bitcoin mainnet blocks in `bitcoin/` at the project root before starting the oracle. The service builds a UTXO set one block at a time and never inserts a simulated Bitcoin balance. Hardhat tests set deterministic oracle values only inside their isolated local test chain.
+#### 4b. Auto-Voter
+
+The auto-voter requires **no external data** — it connects to the local Geth node and automatically votes YES on every new loan proposal, as required by the specification.
 
 ```bash
-# Terminal 4: Run Auto-Voter
+# Terminal 4
 ./.venv/bin/python python/voter/auto_voter.py
 ```
 
@@ -417,8 +441,8 @@ npx hardhat test test/gas_profiling.test.js
 │   └── requirements.txt           # Python dependencies
 │
 ├── private-chain/                 # Local Geth blockchain
-│   ├── geth                       # Geth executable
-│   ├── data/                      # Blockchain data directory
+│   ├── geth                       # Geth v1.13.14 binary (auto-downloaded by setup.sh; gitignored)
+│   ├── data/                      # Blockchain data directory (gitignored)
 │   ├── keystore/                  # Prefunded account key
 │   ├── password.txt               # Keystore unlock password
 │   └── project2526genesis.json    # Chain configuration (chainId 202526)

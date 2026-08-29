@@ -25,3 +25,6 @@ private-chain/geth
 *.aux
 *.log
 *.out
+
+# Polling data files
+*.dat
