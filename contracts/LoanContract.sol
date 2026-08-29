@@ -99,6 +99,13 @@ contract LoanContract {
         if (status != LoanStatus.Funded && status != LoanStatus.Defaulted) revert InvalidState();
         if (msg.value == 0) revert InvalidAmount();
 
+        // A loan that was still unpaid after its expiry is failed, including
+        // when the first late transaction is only a partial repayment.
+        if (status == LoanStatus.Funded && block.number > dueBlock) {
+            status = LoanStatus.Defaulted;
+            IFundingPool(pool).handleLoanDefaulted();
+        }
+
         uint256 payment = msg.value;
         
         uint256 remainingPrincipal = principal - repaidPrincipal;
@@ -120,15 +127,8 @@ contract LoanContract {
 
         currentCollateralAmount += excessAmount;
 
-        if (repaidPrincipal == principal && repaidInterest == expectedInterest) {
-            if (status == LoanStatus.Funded) {
-                if (block.number > dueBlock) {
-                    status = LoanStatus.Defaulted;
-                    IFundingPool(pool).handleLoanDefaulted();
-                } else {
-                    status = LoanStatus.Repaid;
-                }
-            }
+        if (repaidPrincipal == principal && repaidInterest == expectedInterest && status == LoanStatus.Funded) {
+            status = LoanStatus.Repaid;
         }
 
         (bool sent, ) = payable(pool).call{value: msg.value}("");

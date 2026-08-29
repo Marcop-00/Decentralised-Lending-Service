@@ -14,6 +14,8 @@ async function updateBalance(oracle, owner, borrower, address, sats = 100n * 100
 }
 
 describe("Trace compliance regressions", function () {
+
+
   it("uses current disposable funds, not ETH reserved for gains and compensation", async function () {
     const [owner, contributor, borrower] = await ethers.getSigners();
     const { pool, oracle } = await deployProtocol();
@@ -43,6 +45,34 @@ describe("Trace compliance regressions", function () {
     const rejected = await pool.proposals(2);
     expect(rejected.executed).to.equal(true);
     expect(rejected.loanContract).to.equal(ethers.ZeroAddress);
+  });
+
+  it("deducts proportional-rounding remainder from the loan actually disbursed", async function () {
+    const [owner, first, second, third, borrower] = await ethers.getSigners();
+    const { pool, oracle } = await deployProtocol();
+    const btcAddress = "tb1q-rounding";
+    const requested = ethers.parseEther("4");
+
+    await pool.connect(first).contribute({ value: ethers.parseEther("2") });
+    await pool.connect(second).contribute({ value: ethers.parseEther("3") });
+    await pool.connect(third).contribute({ value: ethers.parseEther("6") });
+    await pool.connect(borrower).createLoanProposal(
+      borrower.address, btcAddress, requested, 10, 20, 12,
+    );
+    await pool.connect(first).voteOnProposal(1, true);
+    await pool.connect(second).voteOnProposal(1, true);
+    await pool.connect(third).voteOnProposal(1, true);
+    await updateBalance(oracle, owner, borrower, btcAddress);
+    await mineVotingPeriod();
+    await pool.connect(borrower).executeApprovedLoan(1);
+
+    const loan = await ethers.getContractAt("LoanContract", (await pool.proposals(1)).loanContract);
+    expect(await loan.principal()).to.be.lessThan(requested);
+    expect(await loan.principal()).to.equal(
+      (ethers.parseEther("2") * requested) / ethers.parseEther("11")
+      + (ethers.parseEther("3") * requested) / ethers.parseEther("11")
+      + (ethers.parseEther("6") * requested) / ethers.parseEther("11"),
+    );
   });
 
   it("makes defaults irreversible and never converts compensation into a second withdrawal claim", async function () {
@@ -109,5 +139,28 @@ describe("Trace compliance regressions", function () {
     await pool.connect(owner).terminate();
     await pool.connect(contributor).withdraw(ethers.parseEther("2"));
     expect(await pool.terminated()).to.equal(true);
+  });
+
+  it("marks a loan failed on its first late partial repayment", async function () {
+    const [owner, contributor, borrower] = await ethers.getSigners();
+    const { pool, oracle } = await deployProtocol();
+    const btcAddress = "tb1q-late";
+
+    await pool.connect(contributor).contribute({ value: ethers.parseEther("2") });
+    await pool.connect(borrower).createLoanProposal(
+      borrower.address, btcAddress, ethers.parseEther("1"), 10, 3, 12,
+    );
+    await pool.connect(contributor).voteOnProposal(1, true);
+    await updateBalance(oracle, owner, borrower, btcAddress);
+    await mineVotingPeriod();
+    await pool.connect(borrower).executeApprovedLoan(1);
+    const loan = await ethers.getContractAt("LoanContract", (await pool.proposals(1)).loanContract);
+
+    for (let i = 0; i < 4; i++) await network.provider.send("evm_mine");
+    await loan.connect(borrower).repay({ value: 1n });
+
+    expect(await loan.status()).to.equal(3n);
+    expect(await pool.isLoanFailed(1)).to.equal(true);
+    expect(await pool.collateralPercentage()).to.equal(55n);
   });
 });

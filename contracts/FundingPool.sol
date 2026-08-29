@@ -159,28 +159,6 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         emit ContributionWithdrawn(msg.sender, amount);
     }
 
-    function lockContributorFunds(address contributor, uint256 amount) external onlyOwner notTerminated {
-        if (amount == 0) revert AmountMustBeGreaterThanZero();
-
-        uint256 unlocked = unlockedBalanceOf(contributor);
-        if (amount > unlocked) revert InsufficientUnlockedBalance();
-
-        lockedContributions[contributor] += amount;
-        totalUnlockedFunds -= amount;
-
-        emit FundsLocked(contributor, amount);
-    }
-
-    function unlockContributorFunds(address contributor, uint256 amount) external onlyOwner notTerminated {
-        if (amount == 0) revert AmountMustBeGreaterThanZero();
-        if (amount > lockedContributions[contributor]) revert InsufficientUnlockedBalance();
-
-        lockedContributions[contributor] -= amount;
-        totalUnlockedFunds += amount;
-
-        emit FundsUnlocked(contributor, amount);
-    }
-
     /// @notice Returns the amount of unlocked, freely available funds for a contributor.
     /// @param contributor The address of the contributor.
     /// @return Unlocked balance in wei.
@@ -259,23 +237,17 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
 
         if (totalDisposable == 0 || requiredAmount > totalDisposable) revert InsufficientPoolLiquidity();
 
-        uint256 remaining = requiredAmount;
-
-        for (uint256 i = 0; i < contributors.length && remaining > 0; i++) {
+        // Each position is the floor of its proportional share.  The trace
+        // explicitly requires that finite-precision remainder is deducted
+        // from the amount disbursed to the borrower, rather than assigned to
+        // an arbitrary contributor.
+        for (uint256 i = 0; i < contributors.length; i++) {
             address contributor = contributors[i];
             uint256 disposable = unlockedBalanceOf(contributor);
             if (disposable == 0) continue;
 
             uint256 lockAmount = (disposable * requiredAmount) / totalDisposable;
-            if (i == contributors.length - 1) {
-                lockAmount = remaining;
-            }
-            if (lockAmount > disposable) {
-                lockAmount = disposable;
-            }
-            if (lockAmount > remaining) {
-                lockAmount = remaining;
-            }
+            if (lockAmount == 0) continue;
 
             lockedContributions[contributor] += lockAmount;
             totalUnlockedFunds -= lockAmount;
@@ -285,7 +257,6 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
             loanContributors[proposalId].push(contributor);
             
             totalLocked += lockAmount;
-            remaining -= lockAmount;
         }
 
         uint256 discrepancy = requiredAmount - totalLocked;

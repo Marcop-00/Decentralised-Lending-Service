@@ -106,7 +106,7 @@ POOL_ADDRESS={pool_address}
 OPERATOR_PRIVATE_KEY={deployer.key.hex()}
 VOTER_PRIVATE_KEY={contributor.key.hex()}
 BORROWER_PRIVATE_KEY={borrower.key.hex()}
-BLK_DAT_DIR=../../bitcoin
+BLK_DAT_DIR={os.path.join(os.getcwd(), "bitcoin")}
 """
 
     os.makedirs(os.path.join(os.getcwd(), "python", "oracle"), exist_ok=True)

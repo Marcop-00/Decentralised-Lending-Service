@@ -20,10 +20,10 @@
 The Decentralised Lending Service has been implemented using a modular and upgradeable architecture on Ethereum.
 
 \textbf{Upgradeable Pattern:}\\
-The production topology uses \texttt{FundingPool} as a UUPS implementation and \texttt{FundingPoolProxy} as an ERC-1967 proxy. The proxy is initialized atomically with the oracle address, while the implementation disables direct initialization. Therefore upgrades preserve pool state and can be authorized only by the proxy owner.
+The production topology uses \texttt{FundingPool} as a UUPS implementation and \texttt{FundingPoolProxy} as an ERC-1967 proxy. The proxy is initialized atomically with the oracle address, while the implementation disables direct initialization. Therefore upgrades preserve pool state and can be authorized only by the proxy owner; a regression test upgrades to \texttt{FundingPoolV2} and verifies that contributor accounting is retained.
 
 \textbf{Loan Management:}\\
-Upon approval, the pool deploys a dedicated \texttt{LoanContract}. Vote weights and liquidity are evaluated over the contributors' current disposable balances at resolution; non-voters are rejects. Interest is split into direct gains and compensation collateral. A compensation request marks an overdue loan as defaulted, reduces the compensated contributor's position, and makes the failure irreversible even if a late repayment follows.
+Upon approval, the pool deploys a dedicated \texttt{LoanContract}. Vote weights and liquidity are evaluated over the contributors' current disposable balances at resolution; non-voters are rejects. Interest is split into direct gains and compensation collateral. An overdue loan is marked defaulted by a default request or by its first late repayment; compensation reduces the compensated contributor's position, and a failure remains irreversible even if a late repayment follows.
 
 \textbf{Bitcoin Liquidity Oracle:}\\
 The on-chain \texttt{BitcoinOracle.sol} is a registry. The Python service (\texttt{oracle\_service.py}) processes the first 131,000 Bitcoin mainnet blocks one at a time, maintains UTXOs, listens for \texttt{UpdateRequested}, and writes the requested balance in satoshi. Its fixed minimum fee is the measured 48,799-gas update cost multiplied by 0.1 gwei.
@@ -37,14 +37,14 @@ During the testing phase, we profiled the main operations of the protocol to und
 \toprule
 \textbf{Operation} & \textbf{Gas Used} & \textbf{Notes} \\
 \midrule
-\texttt{contribute()} & 140,948 & Registers contributor accounting. \\
+\texttt{contribute()} & 140,945 & Registers contributor accounting. \\
 \texttt{withdraw()} & 47,693 & Updates balances and refunds ETH. \\
 \texttt{createLoanProposal()} & 189,700 & Stores a proposal. \\
 \texttt{voteOnProposal()} & 106,758 & Records an approval/rejection vote. \\
 \texttt{requestUpdate()} & 24,575 & Emits the oracle request. \\
 \texttt{update()} & 48,799 & Stores a fresh Bitcoin balance. \\
-\texttt{executeApprovedLoan()} & 884,789 & Weights votes, locks funds, deploys a loan. \\
-\texttt{repay()} & 183,300 & Distributes base, gains and collateral. \\
+\texttt{executeApprovedLoan()} & 912,836 & Weights votes, locks funds, deploys a loan. \\
+\texttt{repay()} & 183,497 & Distributes base, gains and collateral. \\
 \texttt{claimInterestGain()} & 33,454 & Pays a contributor's accrued gain. \\
 \bottomrule
 \end{tabular}
@@ -90,21 +90,23 @@ The malicious actor gets all of their original contribution back (via the partia
 \end{itemize}
 
 \subsection*{1. Start the Blockchain}
-Compile the contracts, then initialize and start Geth with the prefunded account unlocked only for transfers:
+Run \texttt{./setup.sh}, then initialize and start Geth with the prefunded account unlocked as the Clique miner:
 \begin{verbatim}
-npm run compile
+./setup.sh
 cd private-chain
 ./geth --datadir=./data init project2526genesis.json
-./geth --datadir=./data --networkid=202526 --http \
---http.addr=127.0.0.1 --http.port=8545 --http.api=eth,net,web3 \
---unlock d278d247a52c550508ea2b2c9321d816238fb523 \
---password password.txt --allow-insecure-unlock
+./geth --datadir=./data --keystore=./keystore \
+  --networkid=202526 --http --http.addr=127.0.0.1 \
+  --http.port=8545 --http.api=eth,net,web3 --mine \
+  --miner.etherbase=d278d247a52c550508ea2b2c9321d816238fb523 \
+  --unlock d278d247a52c550508ea2b2c9321d816238fb523 \
+  --password password.txt --allow-insecure-unlock --ipcdisable
 \end{verbatim}
 
 \subsection*{2. Run Setup}
 Execute the Python setup script to generate accounts, deploy the contracts, and create \texttt{.env} files:
 \begin{verbatim}
-python python/setup.py
+./.venv/bin/python python/setup.py
 \end{verbatim}
 \textit{This deploys BitcoinOracle, the FundingPool implementation and its initialized proxy, and generates new keys for the Deployer, Contributor, and Borrower.}
 
@@ -112,16 +114,16 @@ python python/setup.py
 Open two new terminals and start the off-chain components. Keep them running:
 \begin{verbatim}
 # Terminal 1: Bitcoin Oracle
-python python/oracle/oracle_service.py
+./.venv/bin/python python/oracle/oracle_service.py
 
 # Terminal 2: Auto Voter
-python python/voter/auto_voter.py
+./.venv/bin/python python/voter/auto_voter.py
 \end{verbatim}
 
 \subsection*{4. Run the Simulation}
 In a separate terminal, run the full lifecycle simulation script:
 \begin{verbatim}
-python python/simulate.py
+./.venv/bin/python python/simulate.py
 \end{verbatim}
 This script executes a deposit, proposal, oracle update, vote, resolution, repayment and interest claim. It prints balances, disposable funds, compensation funds, collateral percentage and active-loan count after every meaningful transition.
 

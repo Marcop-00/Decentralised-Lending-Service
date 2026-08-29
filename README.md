@@ -118,7 +118,7 @@ Created → Funded → Repaid/Defaulted
 **Core Functions:**
 - `fundLoan()` - Pool sends ETH to borrower (only pool can call)
 - `repay()` - Borrower repays principal + interest (supports partial repayments)
-- `markDefaulted()` - Marks loan as defaulted if overdue (only pool can call)
+- `markDefaulted()` - Anyone can record an overdue default; it is irreversible
 
 **Interest Calculation:**
 ```
@@ -219,8 +219,7 @@ This will:
 ./.venv/bin/python python/oracle/oracle_service.py
 ```
 
-> **Note on Bitcoin UTXO Sync**: The oracle is programmed to parse the raw Bitcoin blockchain (the first 131,000 blocks) exactly as required by the trace. 
-> To enable real data parsing, drop `blk00000.dat` and `blk00001.dat` into a `bitcoin/` folder in the project root. If the folder is missing, the oracle will gracefully skip the heavy sync phase and inject a mock balance so you can still test the lending flow seamlessly!
+> **Bitcoin UTXO sync is required for the full simulation.** Put the `blk*.dat` files containing the first 131,000 Bitcoin mainnet blocks in `bitcoin/` at the project root before starting the oracle. The service builds a UTXO set one block at a time and never inserts a simulated Bitcoin balance. Hardhat tests set deterministic oracle values only inside their isolated local test chain.
 
 ```bash
 # Terminal 4: Run Auto-Voter
@@ -258,7 +257,7 @@ This will:
 
 3. COLLATERAL VERIFICATION PHASE
    Borrower calls: oracle.requestUpdate(btcAddress)
-   with fee (0.001 ETH)
+   with fee (0.0000048799 ETH)
    → Emits UpdateRequested event
    → Python oracle service detects event
    → Queries Bitcoin blockchain for address balance
@@ -277,7 +276,7 @@ This will:
 6. LOAN EXECUTION PHASE
    Borrower calls: pool.executeApprovedLoan(proposalId=1)
    → Creates new LoanContract for this proposal
-   → FundingPool.fundLoan() sends 1 ETH to LoanContract
+   → FundingPool transfers the approved, actually lockable amount to LoanContract
    → LoanContract.fundLoan() transfers 1 ETH to Borrower
    → Loan status: Funded
 
@@ -286,7 +285,7 @@ This will:
    Sends: 1.05 ETH (principal + interest)
    
    Distribution:
-   - Principal: 1.00 ETH (returned to pool)
+   - Principal: 1.00 ETH (unlocked back to the contributors, highest original locked amount first)
    - Interest: 0.05 ETH
      - Collateral portion: 0.025 ETH (50%) → compensation pool
      - Gain portion: 0.025 ETH (50%) → distributed to contributors
@@ -336,14 +335,17 @@ npm test
 6. **gas_report.test.js** - Detailed gas reporting
    - Function-level gas consumption
 
+7. **trace_compliance.test.js** - Requirements-specific checks
+   - Voting by current disposable balances, rounding, termination and failed-loan compensation
+
 ### Example Test Run
 
 ```bash
 # Run specific test file
 npx hardhat test test/fundingPool.test.js
 
-# Run with gas reporting
-REPORT_GAS=true npx hardhat test
+# Print the measured gas costs used in the report
+npx hardhat test test/gas_profiling.test.js
 ```
 
 ## 🔐 Security Considerations
@@ -379,39 +381,50 @@ REPORT_GAS=true npx hardhat test
 ├── contracts/                      # Smart contracts
 │   ├── BitcoinOracle.sol          # Bitcoin balance tracking
 │   ├── FundingPool.sol            # Core lending protocol (upgradeable)
+│   ├── FundingPoolProxy.sol       # ERC-1967 UUPS proxy
 │   ├── LoanContract.sol           # Individual loan contracts
 │   ├── ReentrancyVulnerableLoan.sol # Vulnerable version (for testing)
 │   └── ReentrancyAttacker.sol     # Attack contract (for testing)
 │
 ├── docs/                           # Documentation
-│   └── report.tex                 # LaTeX Project Report
+│   ├── report.tex                 # LaTeX source
+│   └── report.pdf                 # Compiled PDF report
 │
 ├── test/                          # Test suite
+│   ├── helpers/
+│   │   └── deployProtocol.js      # Shared deployment helper
 │   ├── fundingPool.test.js        # Integration tests
-│   ├── loancontract.unit.test.js  # LoanContract tests
-│   ├── reentrancy.test.js         # Security tests
+│   ├── loancontract.unit.test.js  # LoanContract unit tests
+│   ├── reentrancy.test.js         # Security / reentrancy tests
 │   ├── security_edge_cases.test.js # Edge case tests
 │   ├── gas_profiling.test.js      # Gas analysis
 │   ├── gas_report.test.js         # Gas reporting
-│   └── advanced_behaviors.test.js # Partial repayment and compensation tests
+│   ├── advanced_behaviors.test.js # Partial repayment and compensation tests
+│   └── trace_compliance.test.js   # Trace-specific protocol checks
 │
 ├── python/                        # Off-chain services
 │   ├── oracle/
 │   │   ├── oracle_service.py      # Bitcoin oracle listener
 │   │   └── btc_utils.py           # Bitcoin blockchain utilities
-│   └── voter/
-│       └── auto_voter.py          # Automated proposal voting bot
+│   ├── voter/
+│   │   └── auto_voter.py          # Automated proposal voting bot
+│   ├── setup.py                   # Initial deployment script
+│   ├── simulate.py                # Full end-to-end simulation script
+│   └── requirements.txt           # Python dependencies
 │
 ├── private-chain/                 # Local Geth blockchain
 │   ├── geth                       # Geth executable
-│   ├── data/                      # Blockchain data
-│   ├── keystore/                  # Account keys
-│   └── genesis.json               # Chain configuration
+│   ├── data/                      # Blockchain data directory
+│   ├── keystore/                  # Prefunded account key
+│   ├── password.txt               # Keystore unlock password
+│   └── project2526genesis.json    # Chain configuration (chainId 202526)
 │
+├── vendor/                        # Vendored Solidity dependencies
 ├── artifacts/                     # Compiled contracts (generated)
 ├── cache/                         # Compiler cache (generated)
 ├── hardhat.config.js              # Hardhat configuration
 ├── package.json                   # Node dependencies
+├── setup.sh                       # One-shot install & compile script
 └── README.md                      # This file
 ```
 
@@ -444,13 +457,27 @@ flowchart LR
 
 ## 🚨 Environment Variables
 
-Create a `.env` file after deployment:
+`python/setup.py` auto-generates **three separate `.env` files** — one per service:
+
+| File | Used by |
+|---|---|
+| `python/.env` | `simulate.py` |
+| `python/oracle/.env` | `oracle_service.py` |
+| `python/voter/.env` | `auto_voter.py` |
+
+All three share the same keys:
 
 ```env
 ETH_RPC_URL=http://127.0.0.1:8545
 POOL_ADDRESS=0x...
 ORACLE_ADDRESS=0x...
 VOTER_PRIVATE_KEY=0x...
+```
+
+You can also override `BLK_DAT_DIR` (default: `bitcoin/` at the project root) to point the oracle at your Bitcoin block files:
+
+```env
+BLK_DAT_DIR=/path/to/blk_dat_files
 ```
 
 ## 📝 Configuration

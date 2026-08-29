@@ -77,6 +77,12 @@ def main():
         "Borrower": borrower
     }
 
+    bitcoin_dir = Path(os.getenv("BLK_DAT_DIR", Path(__file__).resolve().parent.parent / "bitcoin"))
+    if not bitcoin_dir.is_dir():
+        print(f"❌ Bitcoin block directory not found: {bitcoin_dir}")
+        print("   The full simulation requires the first 131,000 Bitcoin mainnet blocks for the real oracle.")
+        return
+
     print("🚀 Starting Lending Flow Simulation...")
     print_balances(w3, pool, accounts)
 
@@ -122,7 +128,8 @@ def main():
     print("Make sure they are running in separate terminals!")
     
     # Poll for oracle update and vote
-    while True:
+    oracle_deadline = time.monotonic() + 180
+    while time.monotonic() < oracle_deadline:
         balance = oracle.functions.getBalance(btc_address).call()
         prop = pool.functions.proposals(proposal_id).call()
         yes_votes = prop[6]
@@ -133,6 +140,9 @@ def main():
             break
         time.sleep(5)
         print("   Polling...")
+    else:
+        print("❌ Oracle/voter did not complete within 180 seconds. Verify both background services and Bitcoin data.")
+        return
 
     # Wait for voting period to end
     print("\n⏳ Waiting for voting period to end (12 blocks)...")

@@ -113,10 +113,10 @@ def run_polling_loop(oracle_contract, operator_account, w3: Web3) -> None:
                 btc_address = event["args"]["btcAddress"]
                 logger.info("UpdateRequested: btcAddress=%s", btc_address)
                 
+                # A missing address and an address with no unspent outputs are both
+                # reported as zero.  Never manufacture collateral: the pool must
+                # make its decision from the UTXO set built from Bitcoin blocks.
                 balance = get_address_balance(btc_address)
-                if balance == 0:
-                    balance = 5000000000  # 50 BTC dummy balance for the simulation if the blocks aren't available
-                    
                 logger.info("  Balance: %d satoshi (%.8f BTC)", balance, balance / 1e8)
                 
                 send_update(oracle_contract, operator_account, w3, btc_address, balance)
@@ -163,11 +163,13 @@ def main() -> None:
     operator_account = w3.eth.account.from_key(operator_key)
     oracle_contract = w3.eth.contract(address=Web3.to_checksum_address(oracle_addr), abi=ORACLE_ABI)
 
-    # Phase 1: Sync (Only if you really have the .dat files. If not, it skips to polling)
-    if os.path.exists(blk_dat_dir):
-        sync_bitcoin_blocks(blk_dat_dir)
-    else:
-        logger.warning(f"Bitcoin folder not found in {blk_dat_dir}. Balances will be zero (but polling will work).")
+    # A collateral oracle without the required source blocks would be misleading.
+    # Refuse to publish values until the first 131,000 mainnet blocks are available.
+    if not os.path.isdir(blk_dat_dir):
+        logger.error("Bitcoin block directory not found: %s", blk_dat_dir)
+        logger.error("Provide BLK_DAT_DIR containing blk*.dat for the first 131,000 Bitcoin mainnet blocks.")
+        sys.exit(1)
+    sync_bitcoin_blocks(blk_dat_dir)
 
     # Phase 2: Poll
     run_polling_loop(oracle_contract, operator_account, w3)
