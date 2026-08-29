@@ -180,10 +180,14 @@ Bridges Bitcoin and Ethereum by tracking Bitcoin address balances.
 
 ## 🚀 Quick Start
 
+> [!IMPORTANT]
+> **Prerequisite — Geth binary**: the `private-chain/geth` executable is excluded from version control (it is a 42 MB macOS binary). Before running the private chain you must place the compiled Geth binary at `private-chain/geth`.
+> A compatible build is included in the submission zip. Alternatively, compile from the official Go-Ethereum repository (same version used during development: `v1.13.x` for macOS ARM64).
+
 ### 1. Installation
 
 ```bash
-# Esegui lo script di setup che installerà npm, configurerà il .venv e compilerà i contratti
+# Installs npm deps, creates the Python venv and compiles the contracts
 ./setup.sh
 ```
 
@@ -210,7 +214,7 @@ This will:
 - Generate random accounts for deployer, contributor, and borrower
 - Fund them from pre-funded Geth account
 - Deploy BitcoinOracle, FundingPool implementation and initialized ERC-1967 proxy
-- Generate `.env` file with contract addresses
+- Generate `.env` files under `python/`, `python/oracle/` and `python/voter/`
 
 ### 4. Run Python Services (Optional)
 
