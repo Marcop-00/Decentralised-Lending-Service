@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+/// @title ReentrancyVulnerableLoan
+/// @notice A simplified contract designed to demonstrate a reentrancy vulnerability.
+/// @dev This contract violates the Checks-Effects-Interactions pattern.
 contract ReentrancyVulnerableLoan {
     error InvalidAmount();
     error TransferFailed();
@@ -12,6 +15,8 @@ contract ReentrancyVulnerableLoan {
         balances[msg.sender] += msg.value;
     }
 
+    /// @notice Withdraws the caller's entire balance.
+    /// @dev Vulnerable to reentrancy because the external call happens before the state update.
     function withdraw() external {
         uint256 amount = balances[msg.sender];
         if (amount == 0) revert InvalidAmount();

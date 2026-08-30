@@ -264,6 +264,9 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         return (totalLocked, actualDisbursement);
     }
 
+    /// @dev Distributes interest gains proportionally based on initial locked contributions.
+    /// @param proposalId The ID of the loan proposal.
+    /// @param gainAmount The amount of interest (gain) to distribute in wei.
     function _creditProportionalInterestGain(uint256 proposalId, uint256 gainAmount) internal {
         if (gainAmount == 0) return;
         
@@ -299,6 +302,9 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         }
     }
 
+    /// @dev Adjusts the global collateral percentage based on loan success or failure.
+    /// Increases by 5% on failure, decreases by 5% on success, constrained between 1% and 100%.
+    /// @param loanSucceeded True if the loan was fully repaid, false if it defaulted.
     function _adjustCollateralPercentage(bool loanSucceeded) internal {
         if (loanSucceeded) {
             collateralPercentage = collateralPercentage > 5 ? collateralPercentage - 5 : MIN_COLLATERAL_PERCENTAGE;
@@ -307,6 +313,8 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         }
     }
 
+    /// @notice Allows a contributor to claim their accrued interest gains.
+    /// @dev Transfers the accumulated pending interest to the caller.
     function claimInterestGain() external {
         uint256 amount = pendingInterestGain[msg.sender];
         if (amount == 0) revert InvalidState();
@@ -317,6 +325,9 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         if (!sent) revert TransferFailed();
     }
 
+    /// @notice Requests compensation from the compensation pool for a failed loan.
+    /// @dev The caller forfeits their remaining base repayment from the borrower.
+    /// @param loanAddress The address of the failed LoanContract.
     function requestCompensation(address loanAddress) external {
         if (!authorizedLoanContracts[loanAddress]) revert InvalidAddress();
         
@@ -361,6 +372,11 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         emit CompensationRequested(msg.sender, actualCompensation);
     }
 
+    /// @notice Handles incoming repayments from a LoanContract.
+    /// @dev Distributes base amount, credits interest, and funds the compensation pool.
+    /// @param baseAmount The amount of principal repaid in this transaction.
+    /// @param gainAmount The amount of interest distributed to contributors.
+    /// @param collateralAmount The amount of interest sent to the compensation pool.
     function handleRepayment(
         uint256 baseAmount,
         uint256 gainAmount,
@@ -389,6 +405,8 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         }
     }
 
+    /// @notice Marks a loan as defaulted in the pool's state.
+    /// @dev Callable only by authorized LoanContracts when a default occurs.
     function handleLoanDefaulted() external {
         if (!authorizedLoanContracts[msg.sender]) revert Unauthorized();
         uint256 proposalId = loanToProposalId[msg.sender];
@@ -403,6 +421,9 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         }
     }
 
+    /// @notice Calculates the voting power of a contributor.
+    /// @param contributor The address of the contributor.
+    /// @return The current voting weight based on unlocked funds.
     function votingPowerOf(address contributor) external view returns (uint256) {
         return unlockedBalanceOf(contributor);
     }
@@ -449,6 +470,9 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         );
     }
 
+    /// @notice Casts a vote on an active loan proposal.
+    /// @param proposalId The ID of the loan proposal to vote on.
+    /// @param support True to approve, false to reject.
     function voteOnProposal(uint256 proposalId, bool support) external notTerminated {
         LoanProposal storage proposal = proposals[proposalId];
         if (proposal.borrower == address(0)) revert InvalidProposal();
