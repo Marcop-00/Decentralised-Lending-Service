@@ -9,7 +9,8 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 contract BitcoinOracle is Ownable {
     // Measured cost of update() with a new storage slot on the configured EVM.
     // The trace fixes the gas price factor at 0.1 gwei.
-    uint256 public constant UPDATE_GAS_ESTIMATE = 48_799;
+    // Berlin, optimizer 200, first nonzero update of a 34-character address.
+    uint256 public constant UPDATE_GAS_ESTIMATE = 49_426;
     uint256 public constant ORACLE_GAS_PRICE_WEI = 0.1 gwei;
     uint256 public immutable minFee;
     mapping(string => uint256) private balances;

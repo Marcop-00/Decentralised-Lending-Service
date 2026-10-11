@@ -1,0 +1,40 @@
+{
+  "environment": {
+    "hardhat": "3.18.1",
+    "solidity": "0.8.24",
+    "optimizerRuns": 200,
+    "evmVersion": "berlin",
+    "hardfork": "berlin",
+    "chainId": 202526,
+    "contributors": 1
+  },
+  "measurement": "Transaction receipts: gasUsed (includes intrinsic gas); values are gas units, not wei.",
+  "oracleFee": {
+    "measuredUpdateGas": "49426",
+    "gasPriceWei": "100000000",
+    "minimumFeeWei": "4942600000000",
+    "addressLength": 34
+  },
+  "operations": {
+    "contribute_new": "140923",
+    "withdraw_partial": "47933",
+    "requestUpdate": "25193",
+    "update_new_address": "49426",
+    "update_existing_address": "32326",
+    "createLoanProposal": "234798",
+    "voteOnProposal": "106936",
+    "executeApprovedLoan_approved": "1049458",
+    "repay_partial": "168082",
+    "repay_final": "90716",
+    "claimInterestGain": "24691",
+    "markDefaulted": "103758",
+    "requestCompensation_paid": "54841",
+    "requestCompensation_empty": "45975",
+    "repay_late": "138782",
+    "executeApprovedLoan_rejected": "90860",
+    "withdrawFees": "30868",
+    "upgradeToAndCall": "37769",
+    "terminate": "36295",
+    "withdraw_final": "32412"
+  }
+}

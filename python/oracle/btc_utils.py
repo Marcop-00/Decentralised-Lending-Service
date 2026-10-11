@@ -58,6 +58,13 @@ MAINNET_MAGIC = bytes.fromhex("F9BEB4D9")
 
 # Sentinel hashPrevBlock value for the genesis block.
 GENESIS_PREV = b"\x00" * 32
+MAINNET_GENESIS_HASH = bytes.fromhex(
+    "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
+)[::-1]
+
+
+class BlockDataError(ValueError):
+    """The source cannot provide a complete, consistent mainnet snapshot."""
 
 
 # ─── File iteration ───────────────────────────────────────────────────────────
@@ -144,26 +151,36 @@ def _scan_headers(files: list[str]) -> list[_HeaderRecord]:
         with open(file_path, "rb") as f:
             while True:
                 magic = f.read(4)
-                if len(magic) < 4 or magic == b"\x00\x00\x00\x00":
-                    break  # eof / padding
-                if magic != MAINNET_MAGIC:
-                    logger.warning(
-                        "Unexpected magic at %s offset %d: %s — stopping file",
-                        file_path, f.tell() - 4, magic.hex(),
-                    )
+                if not magic:
                     break
+                if magic == b"\x00\x00\x00\x00":
+                    # Bitcoin Core may preallocate a zero-filled tail. A mixed
+                    # tail is corruption, not a reason to silently stop syncing.
+                    if any(f.read()):
+                        raise BlockDataError(f"Nonzero data after padding in {file_path}")
+                    break
+                if len(magic) < 4:
+                    raise BlockDataError(f"Truncated magic in {file_path} at offset {f.tell() - len(magic)}")
+                if magic != MAINNET_MAGIC:
+                    raise BlockDataError(
+                        f"Unexpected magic in {file_path} at offset {f.tell() - 4}: {magic.hex()}"
+                    )
 
                 size_bytes = f.read(4)
                 if len(size_bytes) < 4:
-                    break
+                    raise BlockDataError(f"Truncated block size in {file_path} at offset {f.tell()}")
                 block_size = struct.unpack("<I", size_bytes)[0]
+                if block_size < 81 or block_size > 4_000_000:
+                    raise BlockDataError(f"Invalid block size {block_size} in {file_path} at offset {f.tell() - 4}")
 
                 # Offset where the block payload begins (= start of header)
                 block_offset = f.tell()
+                if block_offset + block_size > os.fstat(f.fileno()).st_size:
+                    raise BlockDataError(f"Truncated block payload in {file_path} at offset {block_offset}")
 
                 header = f.read(80)
                 if len(header) < 80:
-                    break
+                    raise BlockDataError(f"Truncated block header in {file_path} at offset {block_offset}")
 
                 hash_prev = header[4:36]                     # bytes 4..36
                 bits = struct.unpack("<I", header[72:76])[0]  # bytes 72..76
@@ -203,10 +220,7 @@ def _build_canonical_chain(records: list[_HeaderRecord]) -> list[_HeaderRecord]:
 
     Algorithm:
       1. Index records by hash, and by prev_hash → children.
-      2. Identify the genesis block (prev_hash == GENESIS_PREV).
-         (There can in principle be more than one record with that prev
-         in a malformed file; we pick the one with the canonical genesis
-         hash if present, otherwise the heaviest sub-tree root.)
+      2. Anchor the chain to the known Bitcoin mainnet genesis hash.
       3. Iterative BFS/DFS from genesis, computing cumulative work for
          each reachable block. Track the heaviest tip.
       4. Reconstruct the chain from the heaviest tip back to genesis via
@@ -218,16 +232,10 @@ def _build_canonical_chain(records: list[_HeaderRecord]) -> list[_HeaderRecord]:
         children[r.prev].append(r.hash)
 
     # ── locate genesis ────────────────────────────────────────────────────────
-    genesis_candidates = children.get(GENESIS_PREV, [])
-    if not genesis_candidates:
-        logger.error("No genesis block found in blk.dat files (no record has prev == 0x00*32).")
-        return []
-
-    if len(genesis_candidates) > 1:
-        logger.warning(
-            "Found %d candidate genesis blocks; picking the heaviest sub-tree.",
-            len(genesis_candidates),
-        )
+    genesis = by_hash.get(MAINNET_GENESIS_HASH)
+    if genesis is None or genesis.prev != GENESIS_PREV:
+        raise BlockDataError("The Bitcoin mainnet genesis block is missing or invalid")
+    genesis_candidates = [MAINNET_GENESIS_HASH]
 
     # ── BFS computing cumulative work + parent map ────────────────────────────
     cum_work: dict[bytes, int] = {}
@@ -287,30 +295,33 @@ def parse_blocks(
     Yield (height, CBlock) pairs in canonical-chain order.
 
     `height` is the TRUE block height (0 = genesis) — not the physical
-    file position. Stops after `max_blocks` blocks of the canonical chain,
-    or at the first orphan gap, whichever comes first.
+    file position. Exactly `max_blocks` blocks must be available; missing
+    or corrupt source data raises BlockDataError instead of a partial result.
 
     `blk_dat_path` may be a directory of blk*.dat files or a single .dat
     file. The single-file form is used by test_btc_utils.py to verify the
     genesis block in isolation.
     """
+    if max_blocks <= 0:
+        raise ValueError("max_blocks must be positive")
     files = _resolve_files(blk_dat_path)
     if not files:
-        logger.warning("No blk.dat files found in: %s", blk_dat_path)
-        return
+        raise BlockDataError(f"No blk.dat files found in {blk_dat_path}")
 
     # Pass 1: read all headers (~13 MB RAM for 131k blocks)
     logger.info("Pass 1/2: scanning headers of %d file(s)…", len(files))
     records = _scan_headers(files)
     if not records:
-        return
+        raise BlockDataError(f"No Bitcoin block records found in {blk_dat_path}")
 
     # Pass 2: build canonical chain by cumulative work
     logger.info("Pass 2/2: selecting canonical chain (cumulative work)…")
     canonical = _build_canonical_chain(records)
-    if not canonical:
-        logger.error("Canonical chain selection produced no blocks.")
-        return
+    if len(canonical) < max_blocks:
+        raise BlockDataError(
+            f"Incomplete Bitcoin mainnet chain: found {len(canonical)} connected blocks; "
+            f"need {max_blocks} (heights 0..{max_blocks - 1})"
+        )
 
     logger.info(
         "Canonical chain length: %d blocks (will yield first %d).",
@@ -333,20 +344,18 @@ def parse_blocks(
             f.seek(rec.offset)
             raw = f.read(rec.size)
             if len(raw) < rec.size:
-                logger.warning(
-                    "Block at height %d truncated (%d/%d bytes) — stopping",
-                    height, len(raw), rec.size,
+                raise BlockDataError(
+                    f"Truncated block at height {height}: {len(raw)}/{rec.size} bytes"
                 )
-                break
 
             try:
                 block = CBlock.deserialize(raw)
             except Exception as exc:
-                logger.warning(
-                    "Error deserialising block at height %d (hash %s): %s — stopping",
-                    height, b2lx(rec.hash), exc,
-                )
-                break
+                raise BlockDataError(
+                    f"Cannot deserialize block at height {height} ({b2lx(rec.hash)}): {exc}"
+                ) from exc
+            if block.GetHash() != rec.hash or block.calc_merkle_root() != block.hashMerkleRoot:
+                raise BlockDataError(f"Block integrity check failed at height {height}")
 
             yield height, block
     finally:
@@ -431,10 +440,9 @@ def script_to_address(script_pubkey) -> str | None:
 def _p2pk_to_address(pubkey: bytes) -> str | None:
     """Derive the P2PKH-equivalent address from a P2PK public key.
 
-    Bitcoin treats a P2PK output as belonging to the same address that a
-    P2PKH output paying to HASH160(pubkey) would. This is how the genesis
-    block reward is canonically attributed to address
-    1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa.
+    This is an indexing convention for historical P2PK outputs; it does
+    not change their locking script into P2PKH. The genesis coinbase is
+    separately excluded from the UTXO set because it is unspendable.
     """
     from bitcoin.core.script import (
         OP_CHECKSIG,

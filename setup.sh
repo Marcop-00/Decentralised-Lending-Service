@@ -4,7 +4,7 @@
 set -e
 
 echo "📦 Installing Node.js dependencies..."
-npm install
+npm ci
 
 echo "🐍 Creating Python virtual environment (.venv)..."
 python3 -m venv .venv
@@ -16,8 +16,7 @@ echo "🔨 Compiling Smart Contracts..."
 npm run compile
 
 # ── Geth auto-download ────────────────────────────────────────────────────────
-# Pinned to v1.13.14: v1.14+ removed Clique PoA, --unlock and
-# --allow-insecure-unlock which this chain depends on.
+# Pinned to the pre-PoS Clique implementation used by the course genesis.
 GETH_VERSION="1.13.14"
 GETH_COMMIT="2bd6bd01"
 GETH_DEST="private-chain/geth"

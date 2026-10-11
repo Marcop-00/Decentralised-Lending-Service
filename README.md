@@ -1,551 +1,190 @@
 # Decentralised Lending Service
 
-A blockchain-based peer-to-peer (P2P) lending protocol built on Ethereum that enables direct borrowing and lending with Bitcoin collateral verification through an oracle mechanism.
-
-## 📋 Project Overview
-
-This project implements a decentralized lending platform where:
-- **Contributors** deposit ETH into a funding pool and earn interest from successful loans
-- **Borrowers** can request loans backed by Bitcoin collateral
-- **Automated voting** determines loan approval based on configurable risk parameters
-- **Bitcoin Oracle** verifies borrower Bitcoin balances to ensure collateral availability
-- **Smart contract upgradability** via UUPS proxy pattern for future improvements
-
-### Key Innovation: Bitcoin Collateral Integration
-
-The system uniquely bridges Ethereum and Bitcoin by using an on-chain Bitcoin oracle that:
-- Listens for collateral verification requests from borrowers
-- Queries Bitcoin blockchain data via Python scripts
-- Updates verified Bitcoin balances on-chain
-- Enables risk assessment based on real Bitcoin holdings
-
-## 🏗️ Architecture
-
-### 1. System Components
-
-```mermaid
-flowchart LR
-    %% Actors
-    Borrower([Borrower])
-    Contributor([Contributor])
-
-    %% Environments
-    subgraph Ethereum [Ethereum Network]
-        direction TB
-        FP[[FundingPool.sol]]
-        LC[[LoanContract.sol]]
-        BO[[BitcoinOracle.sol]]
-    end
-
-    subgraph Python [Off-Chain Services]
-        direction TB
-        Oracle[Oracle Service]
-        Voter[Auto-Voter Bot]
-    end
-
-    subgraph Bitcoin [Bitcoin Network]
-        BTC[(Bitcoin UTXOs)]
-    end
-
-    %% High-level relationships
-    Borrower -->|Interacts| Ethereum
-    Contributor -->|Interacts| Ethereum
-    FP -->|Deploys| LC
-    
-    Python -.->|Listens & Updates| Ethereum
-    Python -.->|Reads| Bitcoin
-```
-
-### 2. Interaction Sequence
-
-```mermaid
-sequenceDiagram
-    actor C as Contributor
-    actor B as Borrower
-    participant FP as FundingPool
-    participant BO as BitcoinOracle
-    participant OS as Python Oracle
-    participant BTC as Bitcoin
-
-    Note over C, FP: 1. Pool Funding
-    C->>FP: Deposit ETH
-
-    Note over B, FP: 2. Loan Proposal
-    B->>FP: createLoanProposal()
-    
-    Note over B, BTC: 3. Collateral Verification
-    B->>BO: requestUpdate() + Fee
-    BO-->>OS: Emit UpdateRequested
-    OS->>BTC: Query Address UTXOs
-    BTC-->>OS: Return Balance
-    OS->>BO: update(balance)
-
-    Note over B, FP: 4. Execution & Funding
-    B->>FP: executeApprovedLoan()
-    FP->>BO: getBalance()
-    BO-->>FP: Return Validated Balance
-    FP->>FP: Deploy LoanContract & Transfer Funds
-```
-
-### Smart Contracts
-
-#### 1. **FundingPool.sol** + **FundingPoolProxy.sol** (UUPS Upgradeable)
-The central hub managing loans, contributions, and voting.
-
-**Core Functions:**
-- `contribute()` - Contributors deposit ETH to earn interest
-- `createLoanProposal()` - Borrowers submit loan requests with terms
-- `voteOnProposal()` - Contributors vote on loan approval
-- `executeApprovedLoan()` - Creates funded LoanContract after approval
-- `handleRepayment()` - Receives repayments and distributes gains/collateral
-- `requestCompensation()` - Contributors claim compensation from failed loans
-
-**Key Features:**
-- **Voting Mechanism:** Voting period = 12 blocks; at resolution, votes are weighted by the contributors' current disposable balances and non-voters count as implicit rejects.
-- **Interest Distribution:** Loan interest split between gains and collateral pool (default 50/50)
-- **Compensation Pool:** Accumulates collateral from loan failures. Targeted compensation requests forfeit future loan repayments.
-- **Collateral Requirement:** Borrowers must have Bitcoin balance ≥ principal / 30 BTC
-- **Termination Logic:** The owner can terminate only when no active loan remains; contributors can still withdraw their unlocked capital and claim accrued interest.
-
-#### 2. **LoanContract.sol**
-Individual loan contract deployed for each approved proposal.
-
-**Loan Lifecycle:**
-```
-Created → Funded → Repaid/Defaulted
-```
-
-**Core Functions:**
-- `fundLoan()` - Pool sends ETH to borrower (only pool can call)
-- `repay()` - Borrower repays principal + interest (supports partial repayments)
-- `markDefaulted()` - Anyone can record an overdue default; it is irreversible
-
-**Interest Calculation:**
-```
-Total Interest = Principal × (interestRate / 100)
-Example: 1 ETH at 5% = 0.05 ETH interest
-```
-
-**Collateral Distribution on Repayment:**
-- Interest paid splits into:
-  - **Collateral** = interest × collateral_percentage (e.g., 50%)
-  - **Gain** = interest × (100 - collateral_percentage)
-- Excess payments beyond principal + interest go to collateral pool
-
-#### 3. **BitcoinOracle.sol** (Ownable)
-Bridges Bitcoin and Ethereum by tracking Bitcoin address balances.
-
-**Workflow:**
-1. Borrower calls `requestUpdate(btcAddress)` with fee payment
-2. Emits `UpdateRequested` event listened to by Python oracle service
-3. Python service queries Bitcoin blockchain
-4. Oracle owner calls `update(btcAddress, balanceInSatoshi)` with verified balance
-5. FundingPool reads balance via `getBalance(btcAddress)`
-
-**Fee Model:**
-- Fixed minimum fee: the measured 48,799-gas `update()` cost multiplied by 0.1 gwei (`0.0000048799 ETH`)
-- Paid by borrower requesting collateral verification
-
-## 🔧 Technology Stack
-
-### Smart Contracts
-- **Language:** Solidity 0.8.24
-- **Framework:** Hardhat
-- **Dependencies:**
-  - OpenZeppelin Contracts (upgradeable patterns)
-  - OpenZeppelin Contracts-Upgradeable 5.6.1
-
-### Local Blockchain
-- **Network:** Geth (Go Ethereum)
-- **Chain ID:** 202526
-- **Block Time:** ~10 seconds
-- **Configuration:** See `private-chain/` directory
-
-### Python Integration
-- **Oracle Service** (`python/oracle/oracle_service.py`):
-  - Listens for `UpdateRequested` events
-  - Queries Bitcoin blockchain
-  - Parses UTXO data to calculate addresses
-  - Calls oracle `update()` function
-
-- **Auto-Voter** (`python/voter/auto_voter.py`):
-  - Monitors `LoanProposed` events
-  - Automatically and unconditionally votes YES on all proposals (as per Trace specifications)
-
-### Development Tools
-- Node.js & npm
-- Ethers.js v6.13.4
-- Chai for testing
-- Python 3 with Web3.py
-
-## 🚀 Quick Start
-
-> [!NOTE]
-> **Geth binary**: `setup.sh` automatically downloads the pinned Geth v1.13.14 build
-> for your OS and architecture (macOS/Linux × amd64/arm64) into `private-chain/geth`.
-> No manual installation required. Pinned to v1.13.x because v1.14+ removed
-> Clique PoA, `--unlock` and `--allow-insecure-unlock`.
-
-### 1. Installation
-
-```bash
-# Installs npm deps, creates the Python venv, compiles the contracts
-# and auto-downloads the Geth binary for your platform
-./setup.sh
-```
-
-### 2. Start Private Blockchain
-
-```bash
-# Terminal 1: initialise and start Geth. The prefunded account MUST be unlocked to act as the PoA block miner.
-cd private-chain
-./geth --datadir=./data init project2526genesis.json
-./geth --datadir=./data --keystore=./keystore --networkid=202526 --http --http.addr=127.0.0.1 \
-  --http.port=8545 --http.api=eth,net,web3 --mine --miner.etherbase=d278d247a52c550508ea2b2c9321d816238fb523 \
-  --unlock d278d247a52c550508ea2b2c9321d816238fb523 --password password.txt \
-  --allow-insecure-unlock --ipcdisable
-```
-
-### 3. Deploy Contracts
-
-```bash
-# Terminal 2: Deploy to private network
-./.venv/bin/python python/setup.py
-```
-
-This will:
-- Generate random accounts for deployer, contributor, and borrower
-- Fund them from pre-funded Geth account
-- Deploy BitcoinOracle, FundingPool implementation and initialized ERC-1967 proxy
-- Generate `.env` files under `python/`, `python/oracle/` and `python/voter/`
-
-### 4. Run Python Services
-
-#### 4a. Bitcoin Oracle (requires `blk*.dat` files)
-
-The off-chain oracle service is **required** by the project specification (§1.4). It reads the first 131,000 Bitcoin mainnet blocks, builds an in-memory UTXO set, and responds to on-chain `UpdateRequested` events by publishing verified Bitcoin address balances to the `BitcoinOracle` contract.
-
-> [!WARNING]
-> **Bitcoin UTXO sync is required.** Place the `blk00000.dat` and `blk00001.dat` files (containing the first 131,000 Bitcoin mainnet blocks, as provided in the course material) into a `bitcoin/` directory at the project root before starting the oracle. 
-> 
-> *Important: If you extract these files yourself from a modern Bitcoin Core node (v0.21+), they are XOR-encrypted by default and must be decrypted before use.*
-
-The directory should look like:
-```
-bitcoin/
-├── blk00000.dat   (~128 MB)
-└── blk00001.dat   (~128 MB)
-```
-
-> [!NOTE]
-> The oracle performs a **two-pass** canonical-chain sort before processing (Bitcoin Core writes blocks out of order). The first sync of 131,000 blocks takes a few minutes. Progress is logged every 10,000 blocks.
-
-```bash
-# Terminal 3: Start the oracle
-./.venv/bin/python python/oracle/oracle_service.py
-```
-
-#### 4b. Auto-Voter
-
-The auto-voter requires **no external data** — it connects to the local Geth node and automatically votes YES on every new loan proposal, as required by the specification.
-
-```bash
-# Terminal 4
-./.venv/bin/python python/voter/auto_voter.py
-```
-
-### 5. Simulate Lending Flow
-
-```bash
-# Terminal 5: Run full simulation
-./.venv/bin/python python/simulate.py
-```
-
-## 📊 Lending Flow Example
-
-### Complete Loan Lifecycle
-
-```
-1. CONTRIBUTION PHASE
-   Contributor calls: pool.contribute(5 ETH)
-   → Contributor balance: 5 ETH
-   → Available for loans: 5 ETH
-
-2. LOAN PROPOSAL PHASE
-   Borrower calls: pool.createLoanProposal(
-     borrower=0x123...,
-     btcAddress="1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
-     principal=1 ETH,
-     interestRate=5 (5%),
-     duration=3600 blocks,
-     votingPeriod=12 blocks
-   )
-   → Proposal created with ID=1
-   → Voting window: current block → +12 blocks
-
-3. COLLATERAL VERIFICATION PHASE
-   Borrower calls: oracle.requestUpdate(btcAddress)
-   with fee (0.0000048799 ETH)
-   → Emits UpdateRequested event
-   → Python oracle service detects event
-   → Queries Bitcoin blockchain for address balance
-   → Oracle calls: oracle.update(btcAddress, satoshis)
-
-4. COLLATERAL VALIDATION
-   Pool verifies: btcBalance ≥ (principal / 30)
-   Example: 1 ETH requires ≥ 0.0333 BTC ≈ 3.3M sats
-
-5. VOTING PHASE (12 blocks)
-   Contributor votes: pool.voteOnProposal(proposalId=1, support=true)
-   → Can vote multiple times with different addresses
-   → Voting weight = unlocked contribution balance
-   → Result: Yes votes must exceed 50% of the total pool's unlocked funds
-
-6. LOAN EXECUTION PHASE
-   Borrower calls: pool.executeApprovedLoan(proposalId=1)
-   → Creates new LoanContract for this proposal
-   → FundingPool transfers the approved, actually lockable amount to LoanContract
-   → LoanContract.fundLoan() transfers 1 ETH to Borrower
-   → Loan status: Funded
-
-7. REPAYMENT PHASE
-   Borrower calls: loanContract.repay()
-   Sends: 1.05 ETH (principal + interest)
-   
-   Distribution:
-   - Principal: 1.00 ETH (unlocked back to the contributors, highest original locked amount first)
-   - Interest: 0.05 ETH
-     - Collateral portion: 0.025 ETH (50%) → compensation pool
-     - Gain portion: 0.025 ETH (50%) → distributed to contributors
-   
-   Loan status: Repaid
-   Contributor gains: 0.025 ETH + share of interest pool
-
-8. COMPENSATION DISTRIBUTION
-   If loan defaults:
-   → Compensation pool funds lost contributors
-   → Failed loan count increases
-   → Collateral from failed loans covers losses
-```
-
-## 🧪 Testing
-
-### Run All Tests
-
-```bash
-npm test
-```
-
-### Test Categories
-
-1. **fundingPool.test.js** - End-to-end integration testing
-   - Contribution flow
-   - Loan proposal & voting
-   - Execution and repayment
-   
-2. **loancontract.unit.test.js** - LoanContract unit tests
-   - Funding mechanism
-   - Interest calculations
-   - Partial repayments
-   
-3. **reentrancy.test.js** - Security tests
-   - Reentrancy attack scenarios
-   - Checks if vulnerabilities in ReentrancyVulnerableLoan are properly exploited
-   
-4. **security_edge_cases.test.js** - Edge case coverage
-   - Boundary conditions
-   - Invalid states
-   - Authorization checks
-   
-5. **gas_profiling.test.js** - Gas efficiency analysis
-   - Optimizes for costly operations
-   
-6. **gas_report.test.js** - Detailed gas reporting
-   - Function-level gas consumption
-
-7. **trace_compliance.test.js** - Requirements-specific checks
-   - Voting by current disposable balances, rounding, termination and failed-loan compensation
-
-### Example Test Run
-
-```bash
-# Run specific test file
-npx hardhat test test/fundingPool.test.js
-
-# Print the measured gas costs used in the report
-npx hardhat test test/gas_profiling.test.js
-```
-
-## 🔐 Security Considerations
-
-### Implemented Security Measures
-
-1. **Reentrancy Protection**
-   - Uses checks-effects-interactions pattern
-   - Safe external calls via low-level `.call()`
-
-2. **Authorization**
-   - `onlyPool()` modifier restricts LoanContract state changes
-   - `onlyOwner()` for oracle updates (BitcoinOracle)
-
-3. **Input Validation**
-   - Checks for zero addresses
-   - Validates amounts > 0
-   - Ensures valid state transitions
-
-4. **Upgradeable Pattern**
-   - UUPS proxy pattern prevents unauthorized upgrades
-   - Initialization guard prevents multiple initializations
-
-### Known Considerations
-
-- **ReentrancyVulnerableLoan.sol**: Intentionally vulnerable version for testing
-- **Oracle Trust**: Assumes oracle owner is trusted (would be decentralized in production)
-- **Bitcoin Balance Oracle**: Requires Python service for off-chain data fetching
-
-## 📁 Project Structure
-
-```
-├── contracts/                      # Smart contracts
-│   ├── BitcoinOracle.sol          # Bitcoin balance tracking
-│   ├── FundingPool.sol            # Core lending protocol (upgradeable)
-│   ├── FundingPoolProxy.sol       # ERC-1967 UUPS proxy
-│   ├── LoanContract.sol           # Individual loan contracts
-│   ├── ReentrancyVulnerableLoan.sol # Vulnerable version (for testing)
-│   └── ReentrancyAttacker.sol     # Attack contract (for testing)
-│
-├── docs/                           # Documentation
-│   ├── report.tex                 # LaTeX source
-│   └── report.pdf                 # Compiled PDF report
-│
-├── test/                          # Test suite
-│   ├── helpers/
-│   │   └── deployProtocol.js      # Shared deployment helper
-│   ├── fundingPool.test.js        # Integration tests
-│   ├── loancontract.unit.test.js  # LoanContract unit tests
-│   ├── reentrancy.test.js         # Security / reentrancy tests
-│   ├── security_edge_cases.test.js # Edge case tests
-│   ├── gas_profiling.test.js      # Gas analysis
-│   ├── gas_report.test.js         # Gas reporting
-│   ├── advanced_behaviors.test.js # Partial repayment and compensation tests
-│   └── trace_compliance.test.js   # Trace-specific protocol checks
-│
-├── python/                        # Off-chain services
-│   ├── oracle/
-│   │   ├── oracle_service.py      # Bitcoin oracle listener
-│   │   └── btc_utils.py           # Bitcoin blockchain utilities
-│   ├── voter/
-│   │   └── auto_voter.py          # Automated proposal voting bot
-│   ├── setup.py                   # Initial deployment script
-│   ├── simulate.py                # Full end-to-end simulation script
-│   └── requirements.txt           # Python dependencies
-│
-├── private-chain/                 # Local Geth blockchain
-│   ├── geth                       # Geth v1.13.14 binary (auto-downloaded by setup.sh; gitignored)
-│   ├── data/                      # Blockchain data directory (gitignored)
-│   ├── keystore/                  # Prefunded account key
-│   ├── password.txt               # Keystore unlock password
-│   └── project2526genesis.json    # Chain configuration (chainId 202526)
-│
-├── vendor/                        # Vendored Solidity dependencies
-├── artifacts/                     # Compiled contracts (generated)
-├── cache/                         # Compiler cache (generated)
-├── hardhat.config.js              # Hardhat configuration
-├── package.json                   # Node dependencies
-├── setup.sh                       # One-shot install & compile script
-└── README.md                      # This file
-```
-
-## 🔄 Key Workflow Diagrams
-
-### Voting Mechanism
-```mermaid
-flowchart TD
-    Propose([Propose Loan]) -->|Voting Period: 12 blocks| Vote[Contributors Vote]
-    Vote -->|Yes votes > 50% of total pool| Execution[Execution If Approved]
-    Vote -.->|Non-voters = implicit reject| Execution
-    Execution --> CreateLC[Create LoanContract]
-    Execution --> FundBorrower[Fund borrower with principal]
-```
-
-### Interest Distribution
-```mermaid
-flowchart LR
-    Repay([Loan Repayment: 1.05 ETH]) --> Principal[Principal: 1.00 ETH]
-    Repay --> Interest[Interest: 0.05 ETH]
-    
-    Principal --> Reserve[(Pool Reserve)]
-    
-    Interest -->|Split 50/50| Collateral[Collateral: 0.025 ETH]
-    Interest -->|Split 50/50| Gain[Gain: 0.025 ETH]
-    
-    Collateral --> CompPool[(Compensation Pool)]
-    Gain --> ContribDist([Contributor Distribution])
-```
-
-## 🚨 Environment Variables
-
-`python/setup.py` auto-generates **three separate `.env` files** — one per service:
-
-| File | Used by |
-|---|---|
-| `python/.env` | `simulate.py` |
-| `python/oracle/.env` | `oracle_service.py` |
-| `python/voter/.env` | `auto_voter.py` |
-
-All three share the same keys:
-
-```env
-ETH_RPC_URL=http://127.0.0.1:8545
-POOL_ADDRESS=0x...
-ORACLE_ADDRESS=0x...
-VOTER_PRIVATE_KEY=0x...
-```
-
-You can also override `BLK_DAT_DIR` (default: `bitcoin/` at the project root) to point the oracle at your Bitcoin block files:
-
-```env
-BLK_DAT_DIR=/path/to/blk_dat_files
-```
-
-## 📝 Configuration
-
-### FundingPool Constants
-- `BTC_TO_ETH_RATE` = 30 (1 BTC = 30 ETH for collateral calculation)
-- `SATS_PER_BTC` = 100,000,000
-- `MIN_DEPOSIT_WEI` = 100,000 wei
-- `PROPOSAL_VOTING_PERIOD_BLOCKS` = 12 blocks
-- `MIN_COLLATERAL_PERCENTAGE` = 1%
-- `MAX_COLLATERAL_PERCENTAGE` = 100%
-
-### Auto-Voter Strategy
-- The script uses a trace-compliant strategy that **always votes YES** on any new loan proposal, regardless of interest or duration parameters.
-
-## 🎓 Academic Context
-
-This project is developed as part of a **Peer-to-Peer Systems and Blockchain** university course, implementing:
-- Smart contract design patterns (UUPS proxy, authorization, state machines)
-- Decentralized voting mechanisms
-- Cross-chain oracle integration
-- Security best practices for financial protocols
-
-## 📄 License
-
-MIT
-
-## 🤝 Contributing
-
-This is an educational project. Modifications and improvements are welcome for learning purposes.
-
-## 📞 Support
-
-For issues or questions about the project:
-1. Check the test files for usage examples
-2. Review security considerations section
-3. Consult Solidity and Hardhat documentation
-
----
-
-**Last Updated:** 2026-08-15
-**Solidity Version:** 0.8.24
-**Hardhat Version:** 2.29.0
+Project for Peer-to-Peer Systems and Blockchains Lab 2025/26, trace 1.1.
+Contributors pool ETH and vote on loans. A trusted Python oracle records liquidity
+from the first **131,000 Bitcoin mainnet blocks**. BTC ownership is not proved and
+BTC are not locked: this is the professor's didactic simplification.
+
+## Architecture
+
+- FundingPoolProxy holds protocol state and ETH; FundingPool provides UUPS logic.
+- Each approved proposal creates a dedicated LoanContract.
+- BitcoinOracle stores satoshi balances; its Python service indexes Bitcoin UTXOs.
+- The Python voter always votes YES, including when its capital is entirely locked.
+- Both services use a durable SQLite event inbox and signed transaction outbox.
+- Python setup creates accounts and deploys; the Python demo interacts with Geth.
+
+## Laboratory stack
+
+Hardhat **3.18.1**, TypeScript **6.0.3**, **node:test**, **viem 2.57.3**.
+Solidity **0.8.24**, optimizer 200 runs, **Berlin** compiler target and simulated
+network. OpenZeppelin Contracts/Upgradeable **5.6.1**. Native Solidity unit and
+fuzz tests complement the TypeScript integration tests.
+
+Use a supported even-numbered Node release (22.13.0+), Python 3.10+ and the pinned
+Geth **1.13.14** implementation of the course's Clique chain. Dependencies are
+recorded in package-lock.json; setup uses npm ci.
+
+## Install and test
+
+Run from this project directory:
+
+    ./setup.sh
+    npm run typecheck
+    npm test
+    ./.venv/bin/python -m unittest discover -s python/tests -v
+    npm run test:gas
+    npm run test:coverage
+
+Setup installs dependencies, compiles and obtains Geth. It does not start a chain
+or deploy contracts. Hardhat tests use isolated simulated chains.
+Gas profiling writes **docs/gas-measurements.json** from transaction receipts,
+plus Hardhat statistics. Figures depend on hardfork, storage and contributor count.
+Coverage runs exercise the same scenarios without overwriting gas measurements
+with costs from instrumented bytecode. HTML coverage is saved in coverage/html.
+
+## Validate Bitcoin data before the real demo
+
+Supply decoded mainnet blk*.dat records containing the continuous chain from
+genesis to height **130,999**. File names alone do not establish completeness.
+If the source uses block-file obfuscation, export/decode it at the source first.
+
+    ./.venv/bin/python python/oracle/check_data.py --data-dir bitcoin --summary
+
+This offline command needs no Ethereum node, private keys or .env. A successful
+JSON result has **valid: true** and lists funded example addresses and their loan
+capacity. It checks genesis, connected block count, payload hashes and Merkle
+roots. It is a trusted-data parser, not a full Bitcoin consensus node. The genesis
+reward is excluded; subsequent outputs to the same address remain valid.
+
+**Replacement data validated on 11 October 2026:** the seven blk*.dat files
+contain a connected chain of 162,844 blocks. The offline replay successfully
+validated the required first 131,000 blocks (heights 0–130,999), reconstructing
+299,208 UTXOs and 153,986 address entries. Both local copies have identical SHA256
+hashes. The earlier incomplete-data issue is resolved; see
+docs/bitcoin-validation.json for the replay result. The full Geth demo remains
+to be verified. The service still refuses incomplete data.
+
+## Start the private chain
+
+Terminal 1:
+
+    cd private-chain
+    ./geth --datadir=./data init project2526genesis.json
+    ./geth --datadir=./data --keystore=./keystore --networkid=202526 \
+      --http --http.addr=127.0.0.1 --http.port=8545 --http.api=eth,net,web3 \
+      --mine --miner.etherbase=d278d247a52c550508ea2b2c9321d816238fb523 \
+      --unlock d278d247a52c550508ea2b2c9321d816238fb523 \
+      --password password.txt --allow-insecure-unlock --ipcdisable
+
+Terminal 2, from the project root:
+
+    ./.venv/bin/python python/setup.py
+
+Python setup first recompiles ordinary bytecode, including after a coverage run.
+The prefunded account transfers ETH only to newly generated accounts. The new
+deployer deploys the oracle, implementation and initialized proxy. Setup checks
+chain ID 202526, receipts, bytecode and initialization, then writes .env files
+with restrictive permissions and **DEPLOYMENT_BLOCK**. Running it again creates
+a separate deployment and new accounts.
+
+## Services and demo
+
+Start these in separate terminals from the project root:
+
+    ./.venv/bin/python python/oracle/oracle_service.py
+    ./.venv/bin/python python/voter/auto_voter.py
+
+Select an address with sufficient capacity from the validated data summary:
+
+    ./.venv/bin/python python/simulate.py --btc-address YOUR_VALIDATED_ADDRESS --principal 1
+
+BTC_ADDRESS can alternatively be set in the demo environment. The demo waits for
+a fresh oracle event, checks actual liquidity, proposes, waits for the configured
+contributor's YES, resolves, repays in two installments and claims gains. All
+receipt statuses are checked and balances/state are printed along the way.
+
+Services resume scanning from deployment/the saved cursor. Event insertion and
+cursor advancement are atomic. Pending requests survive restarts and failures;
+signed bytes are saved before broadcast, so retries recover the same transaction.
+Closed proposals and conflicting nonces are explicitly recorded for inspection.
+A block-hash checkpoint detects chain resets, even if the chain has regrown.
+This persistence targets the course private chain, without automatic reorg recovery.
+
+SQLite files are named events-*.sqlite3; EVENT_DB_PATH can override their location.
+Use separate databases for each service/deployment and dedicated signing accounts.
+Do not delete a database to fix a temporary RPC outage. No private keys are stored
+in these databases, although signed pending transactions are retained.
+
+## Explicit protocol rules
+
+- Deposits must exceed 100,000 wei. Disposable capital excludes locked funds,
+  pending gains and compensation reserves.
+- Eligibility to vote uses the entire current position, including locked capital.
+  Weights are recalculated using disposable balances at resolution. Nonvoters
+  count as NO and ties reject.
+- **12 blocks is the minimum before resolution**; voting remains possible until
+  the borrower resolves. The retained ABI name votingDeadlineBlock means the
+  earliest resolution block, not expiry of the vote.
+- Allocation is proportional across all contributors. Rounding is deducted from
+  the actual principal disbursed, not assigned to an arbitrary participant.
+- BTC liquidity must cover the request at 1 BTC = 30 ETH.
+- Every installment includes principal and interest. With principal P, interest
+  I = floor(P * rate / 100), and cumulative accepted payment C, the principal
+  target is floor(C * P / (P + I)). Each payment applies differences between
+  cumulative targets. Collateral rounding is cumulative too. Surplus beyond the
+  whole debt goes to the compensation pool.
+- Principal refunds follow descending **initial** loan shares; the higher
+  numerical address wins ties. The merge-sorted order is stored once.
+- Gains use initial proportional weights, enter pendingInterestGain separately
+  from deposits and are withdrawn via claimInterestGain. Distribution dust enters
+  compensation.
+- Collateral is fixed per loan from the global value (initially 50%, bounded
+  1–100%, plus/minus five points per failed/successful loan).
+- Repayment in dueBlock is timely; later repayment records irreversible default.
+  A valid compensation request records default even with zero available funds.
+  A zero payment leaves the claim unchanged for retry after a refill.
+- Compensation forfeits the same amount of future **principal** recovery; original
+  interest weights remain. It never creates a second withdrawal claim.
+- Termination requires no active loans and preserves recovery operations.
+
+The installment split, minimum voting period and zero-compensation behavior are
+documented interpretations of the trace's less explicit wording. Tests encode
+these choices.
+
+## Security, upgrades and scale
+
+The reentrancy test attacks an intentionally unsafe **FundingPoolVulnerable**,
+which inherits the real pool and overrides withdrawal with stale balance writes
+after the external transfer. The same attacker cannot steal other deposits from
+the correct pool. This variant is never used by setup.
+
+FundingPoolV2 demonstrates an actual compatible implementation change. Only the
+owner may upgrade; initialized state and outstanding positions are preserved.
+Existing LoanContract instances are independent immutable deployments: upgrading
+the pool does not change old loan repayment code. Use a fresh setup to demonstrate
+the new rules. Repository changes have not upgraded any existing chain.
+
+Empty contributor positions are removed and sorting is performed once per loan.
+Operations still scale with active contributor count; unlimited participation
+within the block gas limit is outside this didactic design.
+
+## Files and submission
+
+- contracts/: protocol, proxy, oracle, loan and ordering library.
+- contracts/test/: native Solidity tests, compatible V2 and vulnerable variant.
+- test/: TypeScript node:test/viem tests and deployment helper.
+- python/: setup, demo, persistent event processing, oracle, voter and offline tests.
+- private-chain/: genesis and Geth setup.
+- docs/: report source/PDF and gas measurements.
+
+To regenerate the report after profiling:
+
+    python3 docs/render_gas_table.py
+    cd docs
+    latexmk -pdf -interaction=nonstopmode -halt-on-error report.tex
+
+Before submission, run the complete Geth demo with valid Bitcoin data and prepare
+the course ZIP with source, tests, configuration, lockfile, scripts and the report
+(maximum five pages). Omit node_modules, .venv, .env, event databases and regenerable
+Ethereum data. Make the exact Bitcoin snapshot available according to course rules.

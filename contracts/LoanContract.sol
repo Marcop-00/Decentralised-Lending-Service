@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+
 interface IFundingPool {
     function handleRepayment(uint256 baseAmount, uint256 gainAmount, uint256 collateralAmount) external;
     function handleLoanDefaulted() external;
@@ -35,6 +37,9 @@ contract LoanContract {
 
     LoanStatus public status;
 
+    event Repayment(uint256 principalAmount, uint256 interestAmount, uint256 excessAmount);
+    event Defaulted(uint256 dueBlock);
+
     modifier onlyPool() {
         if (msg.sender != pool) revert Unauthorized();
         _;
@@ -57,6 +62,8 @@ contract LoanContract {
     ) {
         if (poolAddress == address(0) || borrowerAddress == address(0)) revert InvalidAmount();
         if (principalAmount == 0) revert InvalidAmount();
+        if (loanInterestRate == 0 || loanInterestRate > 100 || durationBlocks == 0) revert InvalidAmount();
+        if (loanCollateralPercentage == 0 || loanCollateralPercentage > 100) revert InvalidAmount();
 
         pool = poolAddress;
         borrower = borrowerAddress;
@@ -76,7 +83,7 @@ contract LoanContract {
     /// @notice Calculates the total interest amount to be paid on the principal.
     /// @return Total interest in wei.
     function totalInterestAmount() public view returns (uint256) {
-        return (principal * interestRate) / 100;
+        return Math.mulDiv(principal, interestRate, 100);
     }
 
     /// @notice Funds the loan by transferring the principal to the borrower.
@@ -104,27 +111,27 @@ contract LoanContract {
         if (status == LoanStatus.Funded && block.number > dueBlock) {
             status = LoanStatus.Defaulted;
             IFundingPool(pool).handleLoanDefaulted();
+            emit Defaulted(dueBlock);
         }
 
-        uint256 payment = msg.value;
-        
-        uint256 remainingPrincipal = principal - repaidPrincipal;
-        uint256 baseAmount = (payment <= remainingPrincipal) ? payment : remainingPrincipal;
-        
-        repaidPrincipal += baseAmount;
-        uint256 leftoverAfterPrincipal = payment - baseAmount;
-
         uint256 expectedInterest = totalInterestAmount();
-        uint256 remainingInterest = expectedInterest - repaidInterest;
-        
-        uint256 interestPaid = (leftoverAfterPrincipal <= remainingInterest) ? leftoverAfterPrincipal : remainingInterest;
-        repaidInterest += interestPaid;
-        
-        uint256 excessAmount = leftoverAfterPrincipal - interestPaid;
+        uint256 debt = principal + expectedInterest;
+        uint256 paidBefore = repaidPrincipal + repaidInterest;
+        uint256 accepted = Math.min(msg.value, debt - paidBefore);
+        uint256 paidAfter = paidBefore + accepted;
 
-        uint256 currentCollateralAmount = (interestPaid * collateralPercentage) / 100;
+        // Every installment contains base and interest. Calculate cumulative
+        // targets so splitting a payment cannot change the total rounding.
+        uint256 principalAfter = Math.mulDiv(paidAfter, principal, debt);
+        uint256 interestAfter = paidAfter - principalAfter;
+        uint256 baseAmount = principalAfter - repaidPrincipal;
+        uint256 interestPaid = interestAfter - repaidInterest;
+        uint256 excessAmount = msg.value - accepted;
+        uint256 currentCollateralAmount = Math.mulDiv(interestAfter, collateralPercentage, 100)
+            - Math.mulDiv(repaidInterest, collateralPercentage, 100);
         uint256 gainAmount = interestPaid - currentCollateralAmount;
-
+        repaidPrincipal = principalAfter;
+        repaidInterest = interestAfter;
         currentCollateralAmount += excessAmount;
 
         if (repaidPrincipal == principal && repaidInterest == expectedInterest && status == LoanStatus.Funded) {
@@ -135,6 +142,7 @@ contract LoanContract {
         if (!sent) revert TransferFailed();
 
         IFundingPool(pool).handleRepayment(baseAmount, gainAmount, currentCollateralAmount);
+        emit Repayment(baseAmount, interestPaid, excessAmount);
     }
 
     /// @notice Marks the loan as defaulted if it is overdue.
@@ -145,5 +153,6 @@ contract LoanContract {
 
         status = LoanStatus.Defaulted;
         IFundingPool(pool).handleLoanDefaulted();
+        emit Defaulted(dueBlock);
     }
 }

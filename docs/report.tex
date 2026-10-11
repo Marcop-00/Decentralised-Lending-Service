@@ -1,153 +1,217 @@
-\documentclass[11pt,a4paper]{article}
+\documentclass[10pt,a4paper]{article}
 \usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
 \usepackage{geometry}
-\geometry{a4paper, margin=1in}
-\usepackage{hyperref}
-\usepackage{booktabs}
-\usepackage{graphicx}
-\usepackage{titlesec}
-\titleformat{\section}{\Large\bfseries}{\thesection.}{0.55em}{}
+\geometry{margin=0.8in}
+\usepackage{hyperref,booktabs,graphicx,enumitem}
 \setlength{\parindent}{0pt}
-
-\title{
-    \includegraphics[width=0.4\textwidth]{pisa_logo.png}\\[1em]
-    Decentralised Lending Service - Project Report
-}
-\author{Marco Pernisco \\ Student ID: 683674}
-\date{}
-
+\setlength{\parskip}{5pt}
+\setlist{nosep,leftmargin=*}
+\hypersetup{colorlinks=true,urlcolor=blue}
 \begin{document}
-\maketitle
+\begin{center}
+\includegraphics[width=0.20\textwidth]{pisa_logo.png}\\[4pt]
+{\Large\bfseries Decentralised Lending Service}\\
+Marco Pernisco --- Student ID: 683674\\
+P2P Systems and Blockchains Lab 2025/26 --- Trace 1.1
+\end{center}
 
-\section{Implementation Choices of Smart Contracts}
+\section*{1. Architecture and implementation choices}
+An ERC-1967 \texttt{FundingPoolProxy} stores state and ETH and delegates to the
+UUPS \texttt{FundingPool} implementation. The proxy initializes atomically;
+implementation initializers are disabled and only the owner may upgrade.
+The factory deploys a dedicated \texttt{LoanContract} for each approved proposal.
+The pool maintains separate accounting for disposable capital, locked positions,
+claimable interest and the compensation reserve. The reserve is not loanable
+capital and contributes no voting power.
 
-The Decentralised Lending Service is built on Ethereum utilizing a modular and upgradeable smart contract architecture. The main components and design choices are as follows:
+A centralized \texttt{BitcoinOracle} stores satoshi balances. Its owner publishes
+values computed by a Python UTXO index over a historical Bitcoin snapshot.
+Borrowers request updates with a fee; the pool checks the stored liquidity at
+resolution using $1\ {\rm BTC}=30\ {\rm ETH}$. As required by the trace, Bitcoin
+ownership is not proved and BTC are not locked.
 
-\begin{itemize}
-    \item \textbf{Upgradeability via UUPS Proxy}: The main \texttt{FundingPool.sol} contract implements the Universal Upgradeable Proxy Standard (UUPS). This ensures that while the core state is maintained in a proxy contract (\texttt{FundingPoolProxy.sol}), the underlying implementation logic can be upgraded without migrating the accumulated capital or losing historical loan data.
-    \item \textbf{Factory Pattern for Loans}: Instead of managing all loan lifecycles internally within the pool, the system uses a factory pattern. When a loan proposal is successfully approved, the FundingPool dynamically deploys a dedicated \texttt{LoanContract.sol}. This cleanly isolates the state and balance of each active loan and ensures that operations like repayment or default evaluations are self-contained.
-    \item \textbf{Dynamic Voting and Capital Allocation}: A strict voting period is enforced (12 blocks). Voting power is directly proportional to a contributor's current \textit{unlocked} (disposable) balance at the time of resolution. If a loan is approved, the required principal is locked proportionally across all unlocked funds of the participating contributors, and any rounding dust is absorbed into the loan principal rather than being unfairly assigned.
-    \item \textbf{Compensation Pool \& Collateral Logic}: To incentivize repayment and protect against defaults, a portion of the interest paid on successful loans is directed to a compensation pool. In case of a default, contributors can request compensation from this pool, which dynamically adjusts the global collateral percentage (increasing it on failures, decreasing it on successes) to balance the risk-reward ratio of the protocol.
-    \item \textbf{Cross-Chain Oracle Integration}: A centralized, trusted \texttt{BitcoinOracle} contract is deployed to track verified Bitcoin balances. The protocol delegates the off-chain balance fetching to a Python service that parses Bitcoin blocks and pushes the balance back on-chain. This provides a non-locked ``proof of liquidity'' used as a prerequisite to pass a loan proposal.
-\end{itemize}
+\textbf{Voting.} Deposits must exceed 100,000 wei. Contributors may vote even when
+all capital is locked. At resolution, weights are recomputed from current
+disposable balances; abstentions count as NO and ties reject. Twelve blocks is
+interpreted as the \emph{minimum} before resolution: voting remains open until the
+original borrower resolves. The existing ABI name \texttt{votingDeadlineBlock}
+denotes that earliest resolution block. Insufficient pool/BTC liquidity closes
+the proposal as rejected. Capital is locked proportionally across all positions;
+division remainders reduce the principal actually disbursed.
 
-\section{Gas Evaluation Results}
+\textbf{Installments.} For principal $P$, rate $r$, interest
+$I=\lfloor Pr/100\rfloor$ and cumulative accepted repayment $C\le P+I$, define
+\[
+ B(C)=\left\lfloor\frac{CP}{P+I}\right\rfloor,\qquad J(C)=C-B(C).
+\]
+Each installment applies the differences from the previous $B,J$. This interprets
+the trace's base/interest split for every installment, instead of paying all
+principal first. Collateral uses differences of the cumulative
+$\lfloor Jc/100\rfloor$ target; splitting payments therefore preserves these
+rounding totals. Excess beyond the entire debt goes to compensation.
 
-Gas profiling was performed locally on the Hardhat testing environment. The measured gas costs for the main protocol operations are:
+Principal refunds prioritize the largest \emph{initial} backing positions,
+breaking ties by descending numerical address. Merge sort computes this order
+once per loan; old loans without a cached order are prepared lazily. Gains are
+credited separately and proportionally to original shares, with distribution dust
+going to compensation. A pull-payment function transfers each contributor's gain.
 
-\begin{table}[h!]
-\centering
-\begin{tabular}{lrl}
-\toprule
-\textbf{Operation} & \textbf{Gas Used} & \textbf{Description} \\
-\midrule
-\texttt{contribute()} & 140,923 & Depositing ETH into the funding pool \\
-\texttt{withdraw()} & 47,670 & Withdrawing available unlocked funds \\
-\texttt{createLoanProposal()} & 189,788 & Submitting a new loan request \\
-\texttt{voteOnProposal()} & 106,758 & Casting a weighted vote on a proposal \\
-\texttt{requestUpdate()} & 24,575 & Requesting an oracle balance check \\
-\texttt{update()} & 48,799 & Oracle pushing BTC balance on-chain \\
-\texttt{executeApprovedLoan()} & 912,836 & Resolving vote, locking funds, and deploying \texttt{LoanContract} \\
-\texttt{repay()} & 183,475 & Processing a loan repayment and distributing interest \\
-\texttt{claimInterestGain()} & 33,454 & Contributor claiming accrued interest \\
-\bottomrule
-\end{tabular}
-\end{table}
+\textbf{Default and termination.} Each loan snapshots collateral $c$ at creation.
+Global collateral starts at 50, increases/decreases by five points for each
+failed/successful loan and stays within 1--100. Repayment in the due block is
+timely; later repayment records irreversible default. A valid compensation
+request records default even if the reserve is empty: a zero payment preserves
+the claim for a later refill. Compensation forfeits the same amount of future
+principal recovery; original interest weights remain. The owner may terminate
+only without active loans; recovery operations remain available.
 
-\noindent \textit{Note: \texttt{executeApprovedLoan} is significantly more expensive as it handles complex proportional math across all contributors and deploys a new smart contract.}
+\newpage
+\section*{2. Gas evaluation and testing}
+Tests use Hardhat 3.18.1, TypeScript 6.0.3, \texttt{node:test} and viem 2.57.3,
+matching the laboratory's testing approach. Solidity 0.8.24 is compiled with
+optimizer 200 runs and EVM target Berlin. The simulated network also uses Berlin
+and chain ID 202526, matching the provided genesis.
 
-\section{Reentrancy Vulnerability Modification}
+The following figures are \texttt{gasUsed} from actual transaction receipts,
+including intrinsic gas. The reproducible scenario uses one contributor and
+separate partial/final repayments. They are measurements of these inputs and
+storage states, not upper bounds for every possible call.
+\input{gas-table.tex}
 
-To demonstrate a reentrancy attack, a vulnerable contract \texttt{ReentrancyVulnerableLoan.sol} was introduced. 
-In the vulnerable implementation, the \texttt{withdraw()} function transfers Ether to the caller \textit{before} updating the user's balance:
+The oracle fee is calibrated to a first nonzero update of a 34-character
+historical address: $49,426\times0.1$ gwei =
+$4,942,600,000,000$ wei. Existing-slot updates are cheaper. Changing the compiler,
+bytecode or scenario requires recalibration. Public getters used with
+\texttt{eth\_call} do not incur a paid transaction fee.
 
+TypeScript scenarios cover current-balance voting, abstentions/ties, zero-weight
+votes, proportional allocation, rounding, installments, irreversible defaults,
+repeated compensation, termination, oracle access, UUPS upgrades and reentrancy.
+Native Solidity tests include fuzzed repayment conservation and cumulative
+rounding. Python tests exercise genesis exclusion, malformed/incomplete data,
+atomic indexing, persistent events, retries, receipt failures and the demo's
+fresh-balance checks. Coverage and Hardhat gas statistics are generated with
+\texttt{npm run test:coverage} and \texttt{npm run test:gas}.
+Coverage instrumentation does not overwrite the ordinary gas measurements.
+
+\newpage
+\section*{3. Reentrancy modification and malicious strategies}
+\texttt{FundingPoolVulnerable} inherits the actual pool and changes only the
+withdrawal implementation for the test. It caches the position and disposable
+total, transfers ETH first, and then writes stale balances:
 \begin{verbatim}
+uint256 beforePosition = totalContributed[msg.sender];
+uint256 beforePool = totalUnlockedFunds;
 (bool sent, ) = payable(msg.sender).call{value: amount}("");
-require(sent, "TransferFailed");
-balances[msg.sender] = 0; // State is updated AFTER the external call
+if (!sent) revert TransferFailed();
+totalContributed[msg.sender] = beforePosition - amount;
+totalUnlockedFunds = beforePool - amount;
 \end{verbatim}
+The attacker contributes once and recursively calls \texttt{withdraw(amount)}
+from its receive function. Cached assignments leave the same claim available
+during reentry. Merely moving a checked live subtraction after the transfer could
+instead underflow and revert the attack in Solidity 0.8; the tested variant
+demonstrates an actual exploitable modification.
 
-An attacker contract (\texttt{ReentrancyAttacker.sol}) exploits this by implementing a \texttt{receive()} fallback function that recursively calls \texttt{withdraw()}. Because the balance is not set to 0 until the very end, the attacker can repeatedly withdraw funds until the contract is drained.
+The same attacker targets both proxy deployments. It drains others' deposits
+only from the vulnerable variant. The normal pool updates accounting before the
+external call; recursive withdrawals fail and the original legitimate withdrawal
+can finish. The vulnerable implementation is never used by the setup script.
+Checks-effects-interactions and tests address this scenario without claiming a
+general proof against every possible interaction.
 
-\textbf{Resolution in Main Contracts}: The main protocol (e.g., \texttt{FundingPool.sol}) avoids this entirely by strictly adhering to the \textbf{Checks-Effects-Interactions} pattern. Internal state balances (like \texttt{totalContributed} and \texttt{pendingInterestGain}) are deducted \textit{before} any external \texttt{.call\{value: amount\}("")} is executed.
+\textbf{Unfair remuneration without reentrancy.} A whale contributing 6 ETH can
+outvote honest contributors holding 4 ETH, approve a 10 ETH loan to a colluding
+borrower address and deliberately default. Because any sufficiently funded
+Bitcoin address can be cited, the didactic liquidity check does not prevent this.
+The attacker moves 6 ETH of its own capital but captures the minority's 4 ETH;
+the net gain is not the full 10 ETH. Priority refunds also favor large initial
+positions: with backing 6/4, a base repayment of 6 restores the whale's position
+before the smaller contributor recovers anything. These are consequences of the
+specified economic rules, not reasons to silently replace them.
 
-\section{Discussion on Malicious Strategies}
+\textbf{Operational limitations.} The oracle rejects incomplete snapshots and
+excludes the unspendable genesis reward. It applies blocks in order and validates
+their payload/Merkle integrity, while trusting the supplied historical data rather
+than implementing full Bitcoin consensus. The replacement seven-file dataset
+contains 162,844 connected blocks. Offline replay successfully validated the
+required first 131,000 blocks through height 130,999, reconstructing 299,208 UTXOs
+and 153,986 address entries. The earlier incomplete-data issue is resolved;
+the complete Geth demo remains to be verified. No balance is published after a
+failed sync.
 
-Even without technical vulnerabilities like reentrancy, the protocol's economic rules present potential attack vectors for malicious actors:
+The Python services durably enqueue events before advancing the cursor. They
+resume from deployment, retry temporary errors and recover the same signed
+transaction after a timeout. Checkpoints detect chain replacement; nonce conflicts
+are retained for operator inspection. This model targets the single-node private
+chain, without automatic reorganization recovery.
 
-\textbf{Majority Voting Takeover (51\% Attack)}\\
-Since voting power is proportional to a contributor's unlocked balance, a "whale" contributor (or a coordinated syndicate) holding more than 50\% of the pool's liquidity can unilaterally approve or reject any loan. 
-A malicious whale could execute the following strategy:
-\begin{enumerate}
-    \item The whale deposits a massive amount of ETH into the funding pool.
-    \item The whale uses a secondary wallet (Sybil account) to propose a loan for a large portion of the pool's liquidity, offering a high interest rate.
-    \item The borrower account points to a rich Bitcoin address (since ownership of the BTC is not verified by a cryptographic signature, any publicly rich BTC address can be used to pass the liquidity check).
-    \item The whale uses their majority voting power to force the loan's approval.
-    \item Once funded, the borrower (the whale's alt account) absconds with the ETH and deliberately defaults on the loan.
-    \item The honest minority contributors lose their locked funds, while the whale effectively steals the pool's liquidity. 
-\end{enumerate}
+Removing empty positions and caching sorted refund order reduces needless work.
+Operations still grow with active contributor count and must fit the block gas
+limit. A compatible V2 test verifies ownership and storage preservation; existing
+independent loan contracts keep their original bytecode after a pool upgrade.
 
-This highlights a fundamental flaw in using unverified, non-locked Bitcoin balances as collateral combined with plutocratic voting systems.
-
-\section{Brief User Manual}
-
-Follow these steps to set up, deploy, and simulate the Decentralised Lending Service:
-
-\subsection*{Prerequisites}
-\begin{itemize}
-    \item Place the Bitcoin blockchain files (\texttt{blk00000.dat} and \texttt{blk00001.dat}) in a \texttt{bitcoin/} directory at the root of the project to allow the Oracle to parse real UTXO data.
-    \item \textbf{Node.js} \& \textbf{npm}
-    \item \textbf{Python 3.10+} (dependencies in \texttt{python/requirements.txt})
-    \item A local \textbf{Geth} node running the provided genesis block.
-\end{itemize}
-
-\subsection*{1. Installation \& Environment Setup}
-Run the setup script to install Node.js dependencies, configure the Python virtual environment, compile the contracts, and automatically download the required Geth binary.
+\newpage
+\section*{4. Brief user manual}
+Use supported Node 22.13.0+ (supported even-numbered major), Python 3.10+, and the
+pinned Geth 1.13.14 Clique implementation. Run from the project root:
 \begin{verbatim}
 ./setup.sh
+npm run typecheck
+npm test
+./.venv/bin/python -m unittest discover -s python/tests -v
+npm run test:gas
 \end{verbatim}
+Setup installs locked npm dependencies, creates the Python environment, compiles
+and obtains Geth. Validate complete decoded mainnet block files before deployment:
+\begin{verbatim}
+./.venv/bin/python python/oracle/check_data.py \
+  --data-dir bitcoin --summary
+\end{verbatim}
+Continue only when the JSON reports \texttt{valid: true}, 131,000 blocks and
+height 130,999. The summary supplies example addresses and their historical
+liquidity. The checker requires no private keys or Ethereum connection.
 
-\subsection*{2. Start the Private Blockchain}
-In a new terminal window, initialize and start the local Geth node (ensure the pre-funded account is unlocked to allow block mining):
+In terminal 1 initialize and start the chain:
 \begin{verbatim}
 cd private-chain
 ./geth --datadir=./data init project2526genesis.json
-./geth --datadir=./data --keystore=./keystore --networkid=202526 --http --http.addr=127.0.0.1 \
+./geth --datadir=./data --keystore=./keystore \
+  --networkid=202526 --http --http.addr=127.0.0.1 \
   --http.port=8545 --http.api=eth,net,web3 --mine \
   --miner.etherbase=d278d247a52c550508ea2b2c9321d816238fb523 \
   --unlock d278d247a52c550508ea2b2c9321d816238fb523 \
   --password password.txt --allow-insecure-unlock --ipcdisable
 \end{verbatim}
-
-\subsection*{3. Deploy the Smart Contracts}
-In a new terminal, deploy the protocol to the private chain. This will generate necessary \texttt{.env} configuration files for the Python services.
+From the project root, terminal 2 deploys:
 \begin{verbatim}
 ./.venv/bin/python python/setup.py
 \end{verbatim}
+Python setup first rebuilds ordinary bytecode, including after coverage runs.
+The provided prefunded account only transfers ETH to new accounts. The new
+deployer deploys the oracle, implementation and initialized proxy. Setup validates
+chain ID, receipts, code and initialization and writes the service environments
+including the deployment block. Running setup again creates a separate deployment.
 
-\subsection*{4. Run the Off-Chain Services}
-The protocol relies on two Python services to function automatically. Run these in separate terminals:
-\begin{itemize}
-    \item \textbf{Bitcoin Oracle}: Listens for on-chain update requests and fetches balances from the \texttt{.dat} files.
+Start the services in separate terminals:
 \begin{verbatim}
 ./.venv/bin/python python/oracle/oracle_service.py
-\end{verbatim}
-    \item \textbf{Auto-Voter Bot}: Automatically votes ``YES'' on all new loan proposals to ensure loans pass seamlessly.
-\begin{verbatim}
 ./.venv/bin/python python/voter/auto_voter.py
 \end{verbatim}
-\end{itemize}
-
-\subsection*{5. Simulate the Workflow}
-In a final terminal, run the simulation script which performs a full lifecycle (Deposit $\rightarrow$ Loan Proposal $\rightarrow$ Oracle Update $\rightarrow$ Voting $\rightarrow$ Execution $\rightarrow$ Repayment).
+Then choose a funded address from the successful snapshot summary:
 \begin{verbatim}
-./.venv/bin/python python/simulate.py
+./.venv/bin/python python/simulate.py \
+  --btc-address YOUR_VALIDATED_ADDRESS --principal 1
 \end{verbatim}
+The demo requests a fresh balance, verifies sufficient liquidity, contributes,
+proposes, waits for the configured YES vote, resolves and repays in two
+installments before claiming gain. It checks receipts and prints balances/state.
+Use a fresh deployment for the revised loan rules; no previous chain is modified
+by updating repository files.
 
-\subsection*{6. Run the Test Suite}
-To run the full suite of Hardhat tests (including gas profiling, trace compliance, and security tests):
-\begin{verbatim}
-npm test
-\end{verbatim}
-
+Keep the services' separate SQLite databases when restarting after an RPC error.
+The README describes recovery, dataset requirements, report regeneration and
+submission packaging. Complete the real Geth demonstration with valid Bitcoin
+data before producing the final course ZIP.
 \end{document}

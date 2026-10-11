@@ -4,8 +4,10 @@ pragma solidity ^0.8.24;
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import "./LoanContract.sol";
 import "./BitcoinOracle.sol";
+import "./ContributorOrder.sol";
 
 /// @title FundingPool
 /// @notice Manages lending pool contributions, loan proposals, and voting mechanics.
@@ -51,6 +53,9 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     event VoteCast(uint256 indexed proposalId, address indexed voter, bool support, uint256 weight);
     event LoanApproved(uint256 indexed proposalId, address indexed loanContract);
     event LoanRejected(uint256 indexed proposalId, string reason);
+    event LoanDefaulted(uint256 indexed proposalId, address indexed loanContract);
+    event InterestClaimed(address indexed contributor, uint256 amount);
+    event Terminated();
 
     struct LoanProposal {
         address borrower;
@@ -58,7 +63,7 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         uint256 principal;
         uint256 interestRate;
         uint256 durationBlocks;
-        uint256 votingDeadlineBlock;
+        uint256 votingDeadlineBlock; // ABI-compatible name: earliest resolution block, not a vote expiry.
         uint256 yesVotes;
         uint256 noVotes;
         bool executed;
@@ -94,6 +99,9 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     bool public terminated;
     BitcoinOracle public bitcoinOracle;
 
+    // Appended storage: existing proxy slots and loan records retain their layout.
+    mapping(uint256 => bool) private loanOrderPrepared;
+
     uint256 public constant BTC_TO_ETH_RATE = 30;
     uint256 public constant SATS_PER_BTC = 100_000_000;
     uint256 public constant MIN_DEPOSIT_WEI = 100_000;
@@ -128,6 +136,7 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     function terminate() external onlyOwner {
         if (activeLoanCount != 0) revert ActiveLoansExist();
         terminated = true;
+        emit Terminated();
     }
 
     /// @notice Allows users to contribute ETH to the lending pool.
@@ -144,7 +153,7 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
 
     /// @notice Allows contributors to withdraw their unlocked funds.
     /// @param amount The amount of ETH to withdraw in wei.
-    function withdraw(uint256 amount) external {
+    function withdraw(uint256 amount) external virtual {
         if (amount == 0) revert AmountMustBeGreaterThanZero();
 
         uint256 unlocked = unlockedBalanceOf(msg.sender);
@@ -152,6 +161,7 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
 
         totalContributed[msg.sender] -= amount;
         totalUnlockedFunds -= amount;
+        _unregisterEmptyContributor(msg.sender);
 
         (bool sent, ) = payable(msg.sender).call{value: amount}("");
         if (!sent) revert TransferFailed();
@@ -174,36 +184,28 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         }
     }
 
-    /// @dev Refunds the locked base principal back to contributors proportionally when a loan is repaid.
-    /// Sorts contributors by initial locked amount descending to optimize distribution logic.
+    /// @dev Remove fully closed positions so deposit/withdraw churn does not
+    /// permanently grow the list scanned at each proposal resolution.
+    function _unregisterEmptyContributor(address contributor) internal {
+        if (totalContributed[contributor] != 0 || !isContributor[contributor]) return;
+        for (uint256 i = 0; i < contributors.length; i++) {
+            if (contributors[i] == contributor) {
+                contributors[i] = contributors[contributors.length - 1];
+                contributors.pop();
+                isContributor[contributor] = false;
+                return;
+            }
+        }
+    }
+
+    /// @dev Refunds principal in descending order of initial locked amount;
+    /// ties go to the numerically greater address, never to a changing balance.
     function _refundLockedContributors(uint256 proposalId, uint256 baseAmount) internal {
         if (baseAmount == 0) return;
 
         uint256 remaining = baseAmount;
-        address[] memory loanContrs = loanContributors[proposalId];
-        
-        address[] memory order = new address[](loanContrs.length);
-        for (uint256 i = 0; i < loanContrs.length; i++) {
-            order[i] = loanContrs[i];
-        }
-
-        for (uint256 i = 0; i < order.length; i++) {
-            uint256 maxIndex = i;
-            for (uint256 j = i + 1; j < order.length; j++) {
-                uint256 lockedJ = initialLoanContributions[proposalId][order[j]];
-                uint256 lockedMax = initialLoanContributions[proposalId][order[maxIndex]];
-                if (lockedJ > lockedMax) {
-                    maxIndex = j;
-                } else if (lockedJ == lockedMax && uint160(order[j]) > uint160(order[maxIndex])) {
-                    maxIndex = j;
-                }
-            }
-            if (maxIndex != i) {
-                address temp = order[i];
-                order[i] = order[maxIndex];
-                order[maxIndex] = temp;
-            }
-        }
+        _prepareRefundOrder(proposalId);
+        address[] memory order = loanContributors[proposalId];
 
         for (uint256 i = 0; i < order.length && remaining > 0; i++) {
             address contributor = order[i];
@@ -217,11 +219,26 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
             
             totalUnlockedFunds += refund;
             remaining -= refund;
+            emit FundsUnlocked(contributor, refund);
         }
 
         if (remaining > 0) {
             compensationPoolBalance += remaining;
         }
+    }
+
+    /// @dev Store the immutable priority once; also prepares pre-upgrade loans
+    /// lazily when their appended flag is still unset.
+    function _prepareRefundOrder(uint256 proposalId) internal {
+        if (loanOrderPrepared[proposalId]) return;
+        address[] storage accounts = loanContributors[proposalId];
+        ContributorOrder.Position[] memory positions = new ContributorOrder.Position[](accounts.length);
+        for (uint256 i = 0; i < accounts.length; i++) {
+            positions[i] = ContributorOrder.Position(accounts[i], initialLoanContributions[proposalId][accounts[i]]);
+        }
+        ContributorOrder.sort(positions);
+        for (uint256 i = 0; i < accounts.length; i++) accounts[i] = positions[i].account;
+        loanOrderPrepared[proposalId] = true;
     }
 
     /// @dev Locks funds across all contributors proportionally based on their current unlocked balances.
@@ -246,7 +263,7 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
             uint256 disposable = unlockedBalanceOf(contributor);
             if (disposable == 0) continue;
 
-            uint256 lockAmount = (disposable * requiredAmount) / totalDisposable;
+            uint256 lockAmount = Math.mulDiv(disposable, requiredAmount, totalDisposable);
             if (lockAmount == 0) continue;
 
             lockedContributions[contributor] += lockAmount;
@@ -255,10 +272,12 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
             loanContributions[proposalId][contributor] = lockAmount;
             initialLoanContributions[proposalId][contributor] = lockAmount;
             loanContributors[proposalId].push(contributor);
+            emit FundsLocked(contributor, lockAmount);
             
             totalLocked += lockAmount;
         }
 
+        _prepareRefundOrder(proposalId);
         uint256 discrepancy = requiredAmount - totalLocked;
         actualDisbursement = requiredAmount - discrepancy;
         return (totalLocked, actualDisbursement);
@@ -289,7 +308,7 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
             uint256 initialLocked = initialLoanContributions[proposalId][contributor];
             if (initialLocked == 0) continue;
             
-            uint256 share = (gainAmount * initialLocked) / totalInitialLocked;
+            uint256 share = Math.mulDiv(gainAmount, initialLocked, totalInitialLocked);
             if (share > 0) {
                 pendingInterestGain[contributor] += share;
                 disbursed += share;
@@ -323,6 +342,7 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
 
         (bool sent, ) = payable(msg.sender).call{value: amount}("");
         if (!sent) revert TransferFailed();
+        emit InterestClaimed(msg.sender, amount);
     }
 
     /// @notice Requests compensation from the compensation pool for a failed loan.
@@ -336,6 +356,9 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         if (loan.status() == LoanContract.LoanStatus.Repaid) revert InvalidState();
         if (block.number <= loan.dueBlock()) revert InvalidState();
 
+        uint256 owedAmount = loanContributions[proposalId][msg.sender];
+        if (owedAmount == 0) revert AmountMustBeGreaterThanZero();
+
         // Mark the loan as defaulted before compensating. A defaulted loan can
         // still accept late repayments, but it can never become successful.
         if (loan.status() == LoanContract.LoanStatus.Funded) {
@@ -348,21 +371,24 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
             _adjustCollateralPercentage(false);
         }
         
-        uint256 owedAmount = loanContributions[proposalId][msg.sender];
-        if (owedAmount == 0) revert AmountMustBeGreaterThanZero();
-        
         uint256 actualCompensation = owedAmount;
         if (actualCompensation > compensationPoolBalance) {
             actualCompensation = compensationPoolBalance;
         }
 
-        if (actualCompensation == 0) revert CompensationPoolEmpty();
+        // A valid claim still records the default when no compensation is
+        // available. Keep the claim intact so it can be retried after a refill.
+        if (actualCompensation == 0) {
+            emit CompensationRequested(msg.sender, 0);
+            return;
+        }
 
         loanContributions[proposalId][msg.sender] -= actualCompensation;
         lockedContributions[msg.sender] -= actualCompensation;
         // Compensation is paid out of the compensation pool, not converted
         // into a second withdrawable claim against the funding pool.
         totalContributed[msg.sender] -= actualCompensation;
+        _unregisterEmptyContributor(msg.sender);
         
         compensationPoolBalance -= actualCompensation;
 
@@ -394,7 +420,7 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         }
         if (collateralAmount > 0) {
             compensationPoolBalance += collateralAmount;
-            emit CompensationPoolFunded(collateralAmount, collateralPercentage);
+            emit CompensationPoolFunded(collateralAmount, LoanContract(msg.sender).collateralPercentage());
         }
 
         LoanContract loan = LoanContract(msg.sender);
@@ -418,6 +444,7 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
                 activeLoanCount -= 1;
             }
             _adjustCollateralPercentage(false);
+            emit LoanDefaulted(proposalId, msg.sender);
         }
     }
 
@@ -476,11 +503,13 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     function voteOnProposal(uint256 proposalId, bool support) external notTerminated {
         LoanProposal storage proposal = proposals[proposalId];
         if (proposal.borrower == address(0)) revert InvalidProposal();
-        if (block.number >= proposal.votingDeadlineBlock) revert VotingClosed();
+        if (proposal.executed) revert VotingClosed();
         if (hasVoted[proposalId][msg.sender]) revert AlreadyVoted();
 
+        // Eligibility depends on the entire position, including locked value.
+        // A zero-weight vote can become relevant before resolution.
+        if (totalContributed[msg.sender] == 0) revert NoVotingPower();
         uint256 weight = unlockedBalanceOf(msg.sender);
-        if (weight == 0) revert NoVotingPower();
 
         hasVoted[proposalId][msg.sender] = true;
         voteSupport[proposalId][msg.sender] = support;

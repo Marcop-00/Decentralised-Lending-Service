@@ -25,6 +25,12 @@ private-chain/geth
 *.aux
 *.log
 *.out
+*.fdb_latexmk
+*.fls
 
 # Polling data files
 *.dat
+
+# Durable local event queues and oracle readiness snapshots
+python/**/events-*.sqlite3*
+python/**/sync-status*.json

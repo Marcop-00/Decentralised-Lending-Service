@@ -1,0 +1,42 @@
+{
+  "valid": true,
+  "data_dir": "/Users/marcop00/University/Peer to Peer Systems and blockchain/Decentralised-Lending-Service/bitcoin",
+  "blocks": 131000,
+  "last_height": 130999,
+  "utxo_count": 299208,
+  "address_count": 153986,
+  "balances_available": true,
+  "requested_addresses": [
+    {
+      "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+      "satoshi": 4000000
+    }
+  ],
+  "example_addresses": [
+    {
+      "address": "1KLahQtqDNAXvrjNyfvgSBtAhwco5ZxLp4",
+      "satoshi": 43210987654321,
+      "loan_capacity_wei_at_30_eth_per_btc": 1.29632962962963e+25
+    },
+    {
+      "address": "1DKPXsytx6yDLmuWZA23i9ETecWJ6Mbo1K",
+      "satoshi": 12514000000000,
+      "loan_capacity_wei_at_30_eth_per_btc": 3.7542e+24
+    },
+    {
+      "address": "1FeexV6bAHb8ybZjqQMjJrcCrHGW9sb6uF",
+      "satoshi": 7995600100000,
+      "loan_capacity_wei_at_30_eth_per_btc": 2.39868003e+24
+    },
+    {
+      "address": "1PUR3qV3zKcGYXDhmT8o7ekCJP7hnSGzwj",
+      "satoshi": 5500001000000,
+      "loan_capacity_wei_at_30_eth_per_btc": 1.6500003e+24
+    },
+    {
+      "address": "18qXSkiudy9dBNB7eYQJR689vqkjATnSCt",
+      "satoshi": 5112979100000,
+      "loan_capacity_wei_at_30_eth_per_btc": 1.53389373e+24
+    }
+  ]
+}

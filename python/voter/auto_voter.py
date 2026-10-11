@@ -1,164 +1,83 @@
-"""
-auto_voter.py — Automated voting bot for loan proposals.
-
-Operation:
-1. Connects to the local node (Hardhat).
-2. Listens for the 'LoanProposed' event emitted by the FundingPool.
-3. Evaluates loan parameters using a predefined strategy.
-4. Automatically sends the voting transaction (Yes/No).
-"""
+"""Always-YES contributor bot, with a persistent event inbox and retry outbox."""
 
 import json
 import logging
 import os
+from pathlib import Path
+import sys
 import time
 
 from dotenv import load_dotenv
 from web3 import Web3
-from web3.exceptions import ContractLogicError
 
-ENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
-load_dotenv(ENV_PATH)
-
-# ─── Logging Configuration ───────────────────────────────────────────────────
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%H:%M:%S",
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from durable_events import (
+    EventStore, PermanentEventError, make_web3, process_pending, require_local_chain,
+    scan_events, send_durable, store_identity,
 )
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger(__name__)
-
-# ─── Constants and Parameters ────────────────────────────────────────────────────
-RPC_URL = os.getenv("ETH_RPC_URL", "http://127.0.0.1:8545")
-POOL_ADDRESS = os.getenv("POOL_ADDRESS")
-VOTER_PRIVATE_KEY = os.getenv("VOTER_PRIVATE_KEY")
-POLL_INTERVAL = 5 # Seconds between checks
-
-# Dynamic ABI loading from Hardhat's compiled file
-# Make sure the path is correct relative to where you run the script
-ABI_PATH = os.path.join(
-    os.path.dirname(__file__), 
-    "../../artifacts/contracts/FundingPool.sol/FundingPool.json"
-)
-
-# ─── Voting Function ────────────────────────────────────────────────────────
-def evaluate_and_vote(pool_contract, voter_account, w3, proposal_id, principal, interest_rate, duration_blocks):
-    """
-    Evaluates parameters and sends the voting transaction.
-    """
-    # 1. Evaluation logic: the trace requires to always vote YES
-    support = True
-    reason = "Automated strategy (always YES)."
-    vote_str = "YES"
-
-    logger.info(f"Evaluation Proposal #{proposal_id}: Vote {vote_str} -> {reason}")
-
-    # 2. Transaction creation and sending
-    try:
-        nonce = w3.eth.get_transaction_count(voter_account.address)
-        
-        tx = pool_contract.functions.voteOnProposal(proposal_id, support).build_transaction({
-            "from": voter_account.address,
-            "nonce": nonce,
-            "gas": 200000,
-            "gasPrice": w3.eth.gas_price,
-        })
-        
-        signed_tx = voter_account.sign_transaction(tx)
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-        
-        logger.info(f"Voting transaction sent! Hash: {tx_hash.hex()}")
-        
-        # Wait for receipt
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-        
-        if receipt["status"] == 1:
-            logger.info(f"Vote successfully recorded in block {receipt['blockNumber']}!")
-        else:
-            logger.error("Vote failed. Transaction reverted.")
-        
-    except ContractLogicError as e:
-        logger.error(f"Contract logic error during voting: {e}")
-    except Exception as e:
-        logger.error(f"Network/Transaction sending error: {e}")
+POLL_INTERVAL = 5
+SIGNATURE = "LoanProposed(uint256,address,string,uint256,uint256,uint256,uint256)"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+ABI_PATH = PROJECT_ROOT / "artifacts/contracts/FundingPool.sol/FundingPool.json"
 
 
-# ─── Polling Loop ────────────────────────────────────────────────────────
-def run_polling_loop(pool_contract, voter_account, w3):
-    """
-    Continuously scans new blocks to intercept the 'LoanProposed' event.
-    """
-    logger.info("=== AUTO-VOTER STARTED ===")
-    logger.info(f"Listening on Pool address: {pool_contract.address}")
-    logger.info(f"Voter account: {voter_account.address}")
-    
-    last_checked_block = w3.eth.block_number
-    logger.info(f"Starting from block: {last_checked_block}")
-
-    # We get the event signature (topic) to filter it
-    event_signature = "0x" + w3.keccak(text="LoanProposed(uint256,address,string,uint256,uint256,uint256,uint256)").hex()
-
-    while True:
-        time.sleep(POLL_INTERVAL)
-        try:
-            current_block = w3.eth.block_number
-
-            if current_block <= last_checked_block:
-                continue
-
-            # Look for logs between the last checked block and the current one
-            logs = w3.eth.get_logs({
-                "address": pool_contract.address,
-                "topics": [event_signature],
-                "fromBlock": last_checked_block + 1,
-                "toBlock": current_block,
-            })
-
-            last_checked_block = current_block
-
-            for log in logs:
-                # Decode the event using web3.py
-                event = pool_contract.events.LoanProposed().process_log(log)
-                args = event["args"]
-                
-                proposal_id = args["proposalId"]
-                borrower = args["borrower"]
-                principal = args["principal"]
-                interest_rate = args["interestRate"]
-                duration_blocks = args["durationBlocks"]
-                
-                principal_eth = w3.from_wei(principal, 'ether')
-                
-                logger.info("--- NEW PROPOSAL DETECTED ---")
-                logger.info(f"ID: {proposal_id} | Da: {borrower}")
-                logger.info(f"Request: {principal_eth} ETH | Interest: {interest_rate}% | Duration: {duration_blocks} blocks")
-                
-                evaluate_and_vote(pool_contract, voter_account, w3, proposal_id, principal, interest_rate, duration_blocks)
-
-        except Exception as e:
-            logger.error(f"Polling loop error: {e}. Retrying in {POLL_INTERVAL} seconds...")
-
-
-# ─── Entry Point ─────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    w3 = Web3(Web3.HTTPProvider(RPC_URL))
-    
-    if not w3.is_connected():
-        logger.error("Failed to connect to Ethereum node. Ensure Hardhat or Geth is running.")
-        exit(1)
-        
-    if not POOL_ADDRESS or not VOTER_PRIVATE_KEY or POOL_ADDRESS == "0x..." or VOTER_PRIVATE_KEY == "0x...":
-        logger.error("You must configure POOL_ADDRESS and VOTER_PRIVATE_KEY in the script or in the .env file!")
-        exit(1)
-
-    voter_account = w3.eth.account.from_key(VOTER_PRIVATE_KEY)
-    
-    with open(ABI_PATH) as f:
-        pool_abi = json.load(f)["abi"]
-
-    pool_contract = w3.eth.contract(
-        address=Web3.to_checksum_address(POOL_ADDRESS),
-        abi=pool_abi
+def evaluate_and_vote(pool_contract, voter_account, w3, proposal_id, store, event_id):
+    if pool_contract.functions.hasVoted(proposal_id, voter_account.address).call():
+        if not pool_contract.functions.voteSupport(proposal_id, voter_account.address).call():
+            raise PermanentEventError(f"Proposal {proposal_id} already has a NO from this account; votes cannot be changed")
+        logger.info("Proposal %s already has this contributor's vote", proposal_id)
+        return
+    proposal = pool_contract.functions.proposals(proposal_id).call()
+    if proposal[8] or pool_contract.functions.terminated().call():
+        raise PermanentEventError(f"Proposal {proposal_id} or the service is already closed; vote missed")
+    # Contributors with fully locked funds still cast a YES with zero current
+    # weight. The contract recomputes the weight when the applicant resolves.
+    if pool_contract.functions.totalContributed(voter_account.address).call() == 0:
+        raise RuntimeError("Voter has no pool contribution yet; fund its position and retry")
+    receipt = send_durable(
+        w3, voter_account, pool_contract.functions.voteOnProposal(proposal_id, True), store, event_id,
     )
+    if not pool_contract.functions.hasVoted(proposal_id, voter_account.address).call():
+        raise RuntimeError("Successful receipt did not record the expected vote")
+    logger.info("YES recorded for proposal %s in block %s", proposal_id, receipt["blockNumber"])
 
-    run_polling_loop(pool_contract, voter_account, w3)
+
+def run_polling_loop(pool_contract, voter_account, w3, store):
+    logger.info("AUTO-VOTER: pool=%s voter=%s next block=%s", pool_contract.address, voter_account.address, store.next_block)
+    while True:
+        try:
+            scan_events(w3, pool_contract, "LoanProposed", SIGNATURE, store)
+            process_pending(store, lambda event_id, args: evaluate_and_vote(
+                pool_contract, voter_account, w3, args["proposalId"], store, event_id,
+            ), logger)
+        except Exception as exc:
+            logger.error("Polling error; stored cursor/events retained: %s", exc)
+        time.sleep(POLL_INTERVAL)
+
+
+def main():
+    load_dotenv(Path(__file__).with_name(".env"))
+    w3 = make_web3(os.getenv("ETH_RPC_URL", "http://127.0.0.1:8545"))
+    require_local_chain(w3)
+    pool_address = os.environ["POOL_ADDRESS"]
+    voter_account = w3.eth.account.from_key(os.environ["VOTER_PRIVATE_KEY"])
+    with ABI_PATH.open() as stream:
+        abi = json.load(stream)["abi"]
+    pool_contract = w3.eth.contract(address=Web3.to_checksum_address(pool_address), abi=abi)
+    if not w3.eth.get_code(pool_contract.address):
+        raise RuntimeError("POOL_ADDRESS has no contract code on this chain; run setup first")
+    database = os.getenv("EVENT_DB_PATH", str(Path(__file__).with_name(
+        f"events-{pool_address.lower()}-{voter_account.address.lower()}.sqlite3")))
+    store = EventStore(database, store_identity(w3, pool_address, voter_account.address),
+                       int(os.getenv("DEPLOYMENT_BLOCK", "0")))
+    try:
+        run_polling_loop(pool_contract, voter_account, w3, store)
+    finally:
+        store.close()
+
+
+if __name__ == "__main__":
+    main()
