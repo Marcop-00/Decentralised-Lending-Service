@@ -14,7 +14,7 @@ descrive il codice precedente alle correzioni.
 | R04 — Contributor interamente locked escluso dal voto | Idoneità dalla posizione totale; voto anche a peso zero, peso ricalcolato sul disposable alla risoluzione. | Corretto e testato. |
 | R05 — Gas incompleto/gasLimit scambiato per costo | Misure `gasUsed` di 20 scenari, test sul costo effettivo, fee oracolo verificata rispetto alla misura. Coverage separata dai dati gas. | Profilazione eseguita su EVM Berlin. |
 | R06 — Reentrancy dimostrata solo su esempio estraneo | Variante vulnerabile del vero FundingPool con scritture obsolete dopo la call; stesso attacker su proxy sicuro e vulnerabile. | Attacco riuscito solo sulla variante vulnerabile. |
-| R07 — Setup/demo poco robusti | Controlli chain/receipt/bytecode, account prefunded usato solo per trasferimenti, proposta identificata dall'evento, saldo oracle fresco e voto YES effettivo. Ricompilazione normale prima di qualsiasi deploy. | Test offline superati; demo Geth completa ancora da eseguire. |
+| R07 — Setup/demo poco robusti | Controlli chain/receipt/bytecode, account prefunded usato solo per trasferimenti, proposta identificata dall'evento, saldo oracle fresco e voto YES effettivo. Ricompilazione normale prima di qualsiasi deploy. | Test offline e **demo completa su Geth 1.13.14 superati**. |
 
 ## Allineamento al laboratorio e interpretazioni
 
@@ -71,11 +71,32 @@ Il precedente impedimento dei dati incompleti è quindi risolto. Comando di veri
 ./.venv/bin/python python/oracle/check_data.py --data-dir bitcoin --summary
 ```
 
-## Cosa resta da completare
+## Demo completa verificata su Geth
 
-Resta da eseguire la demo reale `setup → oracle/voter → simulate` su Geth:
-il controllo offline dei dati non la sostituisce. Seguire il README con un nuovo
-deployment e poi preparare lo ZIP di consegna.
+L'11 ottobre 2026, alle 17:48, il percorso `setup → oracle/voter → simulate` è
+terminato correttamente su Geth **1.13.14**, chain ID **202526**, genesis del corso
+invariato e periodo Clique di **10 secondi**. La prova ha usato una nuova chain
+locale su porta 18545, senza peer P2P, e gas price di **0,1 gwei**. Le copie dei
+23 file sorgente/configurazione usati sono state confrontate con SHA256.
 
-Le modifiche sono nei file del progetto: non è stato eseguito alcun upgrade o
-deployment sulla chain esistente.
+- Account prefunded usato esclusivamente per tre trasferimenti ai nuovi account.
+- **15 ricevute di transazione con status 1**, inclusi deploy, richiesta/risposta
+  dell'oracolo, deposito, proposta, voto, risoluzione, due rate e incasso interessi.
+- **20 controlli finali sullo stato superati**, più verifica degli eventi delle rate.
+- Entrambe le code SQLite hanno un evento completato e nessun evento pending/dead.
+- Prestito: **1 ETH al 5%**, rimborsato con **due rate da 0,525 ETH**.
+- Capitale disponibile finale: **50 ETH**; locked **0**; prestiti attivi **0**;
+  stato del Loan **Repaid**; interessi da riscuotere **0**.
+- Guadagno lordo incassato: **0,025 ETH**; compensation pool: **0,025 ETH**;
+  saldo complessivo della pool: **50,025 ETH**.
+- Collateral globale finale **45%**, snapshot del prestito **50%**.
+
+Le ricevute, gli indirizzi di test, lo stato e gli hash dei sorgenti sono salvati
+in `geth-demo.json`. I processi temporanei sono stati fermati. La chain e le
+configurazioni del deployment preesistente non sono state modificate.
+
+## Preparazione della consegna
+
+Il controllo dei dati e la demo Geth sono ora completati. Resta la preparazione
+dello ZIP secondo il README e le regole del corso. Le interpretazioni A01–A03
+rimangono documentate come scelte implementative, non come chiarimenti del docente.

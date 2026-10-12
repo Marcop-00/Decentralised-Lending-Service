@@ -137,9 +137,13 @@ their payload/Merkle integrity, while trusting the supplied historical data rath
 than implementing full Bitcoin consensus. The replacement seven-file dataset
 contains 162,844 connected blocks. Offline replay successfully validated the
 required first 131,000 blocks through height 130,999, reconstructing 299,208 UTXOs
-and 153,986 address entries. The earlier incomplete-data issue is resolved;
-the complete Geth demo remains to be verified. No balance is published after a
-failed sync.
+and 153,986 address entries. The earlier incomplete-data issue is resolved.
+The complete Python workflow also passed on Geth 1.13.14 with the unchanged
+course genesis and 10-second Clique blocks: 15 successful transaction receipts,
+20 final state checks and both event queues completed. A 1 ETH loan at 5\%
+was repaid in two 0.525 ETH installments; the contributor claimed 0.025 ETH
+gross gain and compensation retained 0.025 ETH. Evidence is recorded in
+\texttt{docs/geth-demo.json}. No balance is published after a failed sync.
 
 The Python services durably enqueue events before advancing the cursor. They
 resume from deployment, retry temporary errors and recover the same signed
@@ -180,6 +184,7 @@ cd private-chain
 ./geth --datadir=./data --keystore=./keystore \
   --networkid=202526 --http --http.addr=127.0.0.1 \
   --http.port=8545 --http.api=eth,net,web3 --mine \
+  --miner.gasprice=100000000 \
   --miner.etherbase=d278d247a52c550508ea2b2c9321d816238fb523 \
   --unlock d278d247a52c550508ea2b2c9321d816238fb523 \
   --password password.txt --allow-insecure-unlock --ipcdisable
@@ -212,6 +217,7 @@ by updating repository files.
 
 Keep the services' separate SQLite databases when restarting after an RPC error.
 The README describes recovery, dataset requirements, report regeneration and
-submission packaging. Complete the real Geth demonstration with valid Bitcoin
-data before producing the final course ZIP.
+submission packaging. The current workflow has passed on an isolated Geth
+instance with the course genesis and valid Bitcoin data; prepare the final
+course ZIP with the verified sources and report.
 \end{document}

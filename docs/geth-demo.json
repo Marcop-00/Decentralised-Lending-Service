@@ -1,0 +1,191 @@
+{
+  "success": true,
+  "verified_at": "2026-10-11T17:48:16+0200",
+  "client": "Geth/v1.13.14-stable-2bd6bd01/darwin-arm64/go1.21.6",
+  "chain_id": 202526,
+  "genesis_file_sha256": "19dc057b942427491411223520132312745856c3beef37d26882ec43f8211571",
+  "genesis_hash": "4ab43b9fa22d0b43af83072d5e5b9b3871253cfe128bb52c7a37a59c746623ce",
+  "clique_period_seconds": 10,
+  "isolated_rpc": "http://127.0.0.1:18545",
+  "run_directory": "/var/folders/11/jrf00l8d18v7cm_t6n4qqtx00000gn/T/lending-geth-demo-uoevspsh",
+  "bitcoin_blocks_replayed": 131000,
+  "btc_address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+  "contracts": {
+    "pool": "0x947fa8f3f85166190598de9B130Eb322A4547199",
+    "oracle": "0x05cb490D872102511d4247f1084A54073EEF2Dd3",
+    "loan": "0xAC10002550b670a067F30C9397833694C20139Eb"
+  },
+  "accounts": {
+    "contributor": "0x09a63a4e119cE571B69f931fB2EB5F69c4f07d27",
+    "borrower": "0x43C829A1Cb86053b154Da23B5caa097c14134d61"
+  },
+  "checks": {
+    "loan_status": 2,
+    "principal_repaid_wei": 1000000000000000000,
+    "interest_repaid_wei": 50000000000000000,
+    "pool_balance_wei": 50025000000000000000,
+    "disposable_wei": 50000000000000000000,
+    "contribution_wei": 50000000000000000000,
+    "locked_wei": 0,
+    "unclaimed_gain_wei": 0,
+    "compensation_wei": 25000000000000000,
+    "active_loans": 0,
+    "failed_loans": 0,
+    "global_collateral_percent": 45,
+    "loan_collateral_percent": 50,
+    "loan_resolved": true,
+    "loan_balance_wei": 0,
+    "voted": true,
+    "vote_yes": true,
+    "oracle_satoshi": 4000000,
+    "oracle_fee_balance_wei": 4942600000000,
+    "proposal_executed": true
+  },
+  "repayments": [
+    {
+      "principalAmount": 500000000000000000,
+      "interestAmount": 25000000000000000,
+      "excessAmount": 0
+    },
+    {
+      "principalAmount": 500000000000000000,
+      "interestAmount": 25000000000000000,
+      "excessAmount": 0
+    }
+  ],
+  "prefunded_account_used_only_for_three_transfers": true,
+  "receipts": [
+    {
+      "hash": "e3d56f5b4f4ecda71bd1de0b38a87b74d226c907475d22a37132254cd6bd13e3",
+      "block": 2,
+      "gas_used": 21000,
+      "status": 1
+    },
+    {
+      "hash": "474f4c430972086e13424eea78bbb8e5eb04f3b44914f1ffad5f9244fa16eb6e",
+      "block": 3,
+      "gas_used": 21000,
+      "status": 1
+    },
+    {
+      "hash": "35ebce347b6c9a0af277ea975a928b837830fb507079e2baddf23ff468c75988",
+      "block": 4,
+      "gas_used": 21000,
+      "status": 1
+    },
+    {
+      "hash": "8daa516d9178039087d406733534335eb73daf163bdcf335ab1931e4a9da9b07",
+      "block": 5,
+      "gas_used": 412950,
+      "status": 1
+    },
+    {
+      "hash": "496aada9c49817c8b2797b0793b715e4c836ad57cfd2e1bc9377cd9992d5bbad",
+      "block": 6,
+      "gas_used": 4301399,
+      "status": 1
+    },
+    {
+      "hash": "7076aec0d546f6a0dba9066105429a948fa57c1c94c7b25dc3694ce9b9d98189",
+      "block": 7,
+      "gas_used": 222530,
+      "status": 1
+    },
+    {
+      "hash": "fa36492d593eab11f7053efc87abc290df2a22d57a4e1900f67b152cfe92d0a9",
+      "block": 13,
+      "gas_used": 25193,
+      "status": 1
+    },
+    {
+      "hash": "e77c8902dc4a703db967a51de8cdc38dd9eac3dc687ef0454e3a8cb1aa54d01e",
+      "block": 14,
+      "gas_used": 49402,
+      "status": 1
+    },
+    {
+      "hash": "f667d5dc8c9d137f58435ba9f77bb68905e0f8c3ac90a8d778357a7a3e53de90",
+      "block": 15,
+      "gas_used": 140923,
+      "status": 1
+    },
+    {
+      "hash": "4c1fe12bd31f6ec2565abb7ad99d6cee1ea38ed5652481c5e1f7027619e379a5",
+      "block": 16,
+      "gas_used": 234810,
+      "status": 1
+    },
+    {
+      "hash": "9611129093fb91c7bb23c100aa64a3a27345d8125c5758358c7c94e54288ecdf",
+      "block": 17,
+      "gas_used": 106936,
+      "status": 1
+    },
+    {
+      "hash": "f5ac49630d49e42ae37aa7eacbc91e863454613561a72c29de01960ce6437935",
+      "block": 29,
+      "gas_used": 1049458,
+      "status": 1
+    },
+    {
+      "hash": "2cfa694f36987ae988b74a74379402712f99837c3dafa86c099a977ed94d4100",
+      "block": 30,
+      "gas_used": 168082,
+      "status": 1
+    },
+    {
+      "hash": "67da6ccb76f900c177c8064559a55974249357389bdad73a1454d34e965d1f78",
+      "block": 31,
+      "gas_used": 90716,
+      "status": 1
+    },
+    {
+      "hash": "30a8e05e986d48568df32ce86ec20925ec3a4b1bd56a5937bfb7fe579910294f",
+      "block": 32,
+      "gas_used": 24691,
+      "status": 1
+    }
+  ],
+  "source_sha256": {
+    "contracts/BitcoinOracle.sol": "dfff645937c46c42923259915635e9413bb23342c52558ae73dc04c2874823b4",
+    "contracts/ContributorOrder.sol": "04e9b93b9d1441df76437adf5b5059fb6dd4fe31d8be297f3bcaa08690c63bcd",
+    "contracts/FundingPool.sol": "595c54f9dccc389f026d9b2f150e224f9b8a5c51ed0372bb6fe66dc999da6bac",
+    "contracts/FundingPoolProxy.sol": "e606ff836aced72b12f61d87ce1c289aa94a26d62dac07181a057c65079bc69a",
+    "contracts/LoanContract.sol": "2cda5c9daf3568146de7f0293fedbf59ea3b808874fe843ea305a7773bc5bb23",
+    "contracts/ReentrancyAttacker.sol": "c52c8dd995bcd1b629caec413aa8fe328577aebd782fe7e19fe803f7662af3b3",
+    "contracts/test/FundingPoolV2.sol": "6efc242745bf42d4688e87d5f8ed6c6de66058b0c902f89478158143f1262305",
+    "contracts/test/FundingPoolVulnerable.sol": "4b10a1f356779e2369418c899918421a0c04685e178d48de304416f06193866f",
+    "contracts/test/LoanContract.t.sol": "a88af2f8d82bb5c0e8747e646170575f959b841522711934bb93db560d3be427",
+    "hardhat.config.ts": "7d9dabcb24c4c2441fd0469bda3bafd5e66aff9492212689537f8c419f0b81ed",
+    "package-lock.json": "4bcfac322fe4bd2f73ba886b58d85367ce7eaca6ff643028fa398879b45ba95b",
+    "package.json": "89b8f49bbeec816f8ae6ca43a04c807aa1c3d0d46bc33aac7c7c63e4fc03a0ae",
+    "private-chain/project2526genesis.json": "19dc057b942427491411223520132312745856c3beef37d26882ec43f8211571",
+    "python/durable_events.py": "973d5701172786b473ef84bc33d9de187feed6603a1fe6d3a8cf2019225ebf1b",
+    "python/oracle/btc_utils.py": "92789df0dcc2252a9f6157c71b3a59869426a40f817d1a6ada22e958c80848a3",
+    "python/oracle/check_data.py": "79a12499bcd0194716f5e6958f1d1c88f35d5b78c110c59a854ce5f50ebb6aca",
+    "python/oracle/oracle_service.py": "0e10215d66f5fa3fe8aaefa068e1cf82e2f626cf8a8f65d6487df1f296a4380a",
+    "python/setup.py": "bca0a226cdae399b44c52c2222a067a8486798012192879a992b4f0ab9f99367",
+    "python/simulate.py": "96867c3a39c4049ebe73e72dff4ca2fe28af9229d970f5892298359bb0ae9f58",
+    "python/tests/test_bitcoin_oracle.py": "1ae7b1c4dc56336c5d96fd061cb287d10aa94ea59b7f2d95112ed0ad6dfde567",
+    "python/tests/test_service_reliability.py": "a7a0975eb94b1dba3ada25ee3dfc05dc1545581f97ebe3452ff32548c480e0fa",
+    "python/voter/auto_voter.py": "919448dad422dc200c3a92525a2f764cfa76a0634ef84958fa92db045e8645a4",
+    "tsconfig.json": "d499de47adea5f5b4d37fb330eb3a69e1f56452b99ccf32032f6a709d8934acc"
+  },
+  "mining_gas_price_wei": 100000000,
+  "p2p_peers_enabled": false,
+  "temporary_services_stopped": true,
+  "scripts_executed": [
+    "python/setup.py",
+    "python/oracle/oracle_service.py",
+    "python/voter/auto_voter.py",
+    "python/simulate.py --btc-address 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa --principal 1 --timeout 300"
+  ],
+  "durable_event_queues": {
+    "oracle": {
+      "done": 1
+    },
+    "voter": {
+      "done": 1
+    }
+  }
+}

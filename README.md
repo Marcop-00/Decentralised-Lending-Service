@@ -62,8 +62,9 @@ contain a connected chain of 162,844 blocks. The offline replay successfully
 validated the required first 131,000 blocks (heights 0–130,999), reconstructing
 299,208 UTXOs and 153,986 address entries. Both local copies have identical SHA256
 hashes. The earlier incomplete-data issue is resolved; see
-docs/bitcoin-validation.json for the replay result. The full Geth demo remains
-to be verified. The service still refuses incomplete data.
+docs/bitcoin-validation.json for the replay result. The full Geth demo also passed
+on an isolated instance of the same course genesis; evidence is in
+docs/geth-demo.json. The service still refuses incomplete data.
 
 ## Start the private chain
 
@@ -73,7 +74,8 @@ Terminal 1:
     ./geth --datadir=./data init project2526genesis.json
     ./geth --datadir=./data --keystore=./keystore --networkid=202526 \
       --http --http.addr=127.0.0.1 --http.port=8545 --http.api=eth,net,web3 \
-      --mine --miner.etherbase=d278d247a52c550508ea2b2c9321d816238fb523 \
+      --mine --miner.gasprice=100000000 \
+      --miner.etherbase=d278d247a52c550508ea2b2c9321d816238fb523 \
       --unlock d278d247a52c550508ea2b2c9321d816238fb523 \
       --password password.txt --allow-insecure-unlock --ipcdisable
 
@@ -103,6 +105,16 @@ BTC_ADDRESS can alternatively be set in the demo environment. The demo waits for
 a fresh oracle event, checks actual liquidity, proposes, waits for the configured
 contributor's YES, resolves, repays in two installments and claims gains. All
 receipt statuses are checked and balances/state are printed along the way.
+
+The verified Geth 1.13.14 run used the unchanged course genesis (Clique, 10-second
+blocks), localhost port 18545, no P2P peers and a 0.1 gwei mining gas price. All four
+Python scripts ran successfully: 15 successful transaction receipts, 20 final
+state assertions and one completed persistent event in each service queue.
+A 1 ETH loan at 5% was repaid in two 0.525 ETH installments; the contributor
+claimed 0.025 ETH gross gain and compensation retained 0.025 ETH. Final disposable
+capital was 50 ETH, locked capital zero, and the global collateral percentage 45%.
+The isolated test node/services were stopped; existing local deployment settings
+were preserved. docs/geth-demo.json records receipts, state and source hashes.
 
 Services resume scanning from deployment/the saved cursor. Event insertion and
 cursor advancement are atomic. Pending requests survive restarts and failures;
@@ -184,7 +196,8 @@ To regenerate the report after profiling:
     cd docs
     latexmk -pdf -interaction=nonstopmode -halt-on-error report.tex
 
-Before submission, run the complete Geth demo with valid Bitcoin data and prepare
-the course ZIP with source, tests, configuration, lockfile, scripts and the report
+The complete Geth demo has been verified with the current sources and Bitcoin data.
+Before submission, prepare the course ZIP with source, tests, configuration,
+lockfile, scripts and the report
 (maximum five pages). Omit node_modules, .venv, .env, event databases and regenerable
 Ethereum data. Make the exact Bitcoin snapshot available according to course rules.
