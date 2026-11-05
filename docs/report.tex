@@ -190,9 +190,7 @@ cd private-chain
   --unlock d278d247a52c550508ea2b2c9321d816238fb523 \
   --password password.txt --allow-insecure-unlock --ipcdisable
 \end{codeblock}
-Keep the node running. The exposed RPC is local; insecure account unlocking
-is for this private laboratory chain, not a public deployment.
-
+Keep the node running.
 \subhead{3. Create accounts and deploy / terminal 2, project root}
 \begin{codeblock}
 ./.venv/bin/python python/setup.py
@@ -219,8 +217,7 @@ queue after temporary RPC failures; it is separate from Bitcoin indexing.
   --btc-address 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa --principal 1
 \end{codeblock}
 This concrete address has \textbf{4,000,000 satoshi} in the validated snapshot,
-enough for 1 ETH at the fixed rate. With different data, choose a sufficiently
-funded address from your checker summary; do not pass a literal placeholder.
+enough for 1 ETH at the fixed rate.
 Scenario A repays a 1 ETH loan at 5\% in two installments and claims gain.
 Scenario B leaves 0.5 ETH unpaid, requests compensation and retries with an
 empty reserve. Both proposals wait for YES votes and 12 real blocks.
