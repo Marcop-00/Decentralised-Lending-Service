@@ -27,6 +27,7 @@ private-chain/geth
 *.out
 *.fdb_latexmk
 *.fls
+*.listing
 
 # Polling data files
 *.dat

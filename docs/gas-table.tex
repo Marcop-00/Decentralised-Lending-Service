@@ -1,28 +1,35 @@
-\begin{center}\small
-\begin{tabular}{lr}
+\begingroup\fontsize{9}{11}\selectfont
+\renewcommand{\arraystretch}{1.08}
+\par\noindent\begin{tabularx}{\linewidth}{@{}lXr@{}}
 \toprule
-Operation / scenario & Gas units \\
+\textbf{Operation} & \textbf{Scenario} & \textbf{Gas units} \\
 \midrule
-\texttt{contribute\_new} & 140,923 \\
-\texttt{withdraw\_partial} & 47,933 \\
-\texttt{requestUpdate} & 25,193 \\
-\texttt{update\_new\_address} & 49,426 \\
-\texttt{update\_existing\_address} & 32,326 \\
-\texttt{createLoanProposal} & 234,798 \\
-\texttt{voteOnProposal} & 106,936 \\
-\texttt{executeApprovedLoan\_approved} & 1,049,274 \\
-\texttt{repay\_partial} & 168,082 \\
-\texttt{repay\_final} & 90,716 \\
-\texttt{claimInterestGain} & 24,691 \\
-\texttt{markDefaulted} & 103,758 \\
-\texttt{requestCompensation\_paid} & 52,652 \\
-\texttt{requestCompensation\_empty} & 43,786 \\
-\texttt{repay\_late} & 138,782 \\
-\texttt{executeApprovedLoan\_rejected} & 90,860 \\
-\texttt{withdrawFees} & 30,868 \\
-\texttt{upgradeToAndCall} & 37,769 \\
-\texttt{terminate} & 36,295 \\
-\texttt{withdraw\_final} & 32,412 \\
+\addlinespace[2pt]
+\multicolumn{3}{l}{\cellcolor{Mist}\textbf{\color{Navy}FundingPool / via proxy}} \\
+\texttt{contribute()} & New contributor & 140,923 \\
+\texttt{withdraw()} & Partial withdrawal & 47,933 \\
+\texttt{withdraw()} & Final withdrawal & 32,412 \\
+\texttt{createLoanProposal()} & New proposal & 234,798 \\
+\texttt{voteOnProposal()} & YES vote & 106,936 \\
+\texttt{executeApprovedLoan()} & Approved & 1,049,274 \\
+\texttt{executeApprovedLoan()} & Rejected & 90,860 \\
+\texttt{claimInterestGain()} & Claim accrued gain & 24,691 \\
+\texttt{requestCompensation()} & Reserve pays claim & 52,652 \\
+\texttt{requestCompensation()} & Reserve empty & 43,786 \\
+\texttt{upgradeToAndCall()} & Compatible V2 & 37,769 \\
+\texttt{terminate()} & No active loans & 36,295 \\
+\addlinespace[2pt]
+\multicolumn{3}{l}{\cellcolor{Mist}\textbf{\color{Navy}LoanContract}} \\
+\texttt{repay()} & Partial installment & 168,082 \\
+\texttt{repay()} & Final installment & 90,716 \\
+\texttt{repay()} & Late repayment & 138,782 \\
+\texttt{markDefaulted()} & Overdue loan & 103,758 \\
+\addlinespace[2pt]
+\multicolumn{3}{l}{\cellcolor{Mist}\textbf{\color{Navy}BitcoinOracle}} \\
+\texttt{requestUpdate()} & Paid request & 25,193 \\
+\texttt{update()} & First nonzero balance & 49,426 \\
+\texttt{update()} & Existing balance & 32,326 \\
+\texttt{withdrawFees()} & Operator collects fees & 30,868 \\
 \bottomrule
-\end{tabular}
-\end{center}
+\end{tabularx}\par
+\endgroup
