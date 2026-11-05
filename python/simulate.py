@@ -118,7 +118,7 @@ def main():
     contributor = w3.eth.account.from_key(os.environ["VOTER_PRIVATE_KEY"])
     borrower = w3.eth.account.from_key(os.environ["BORROWER_PRIVATE_KEY"])
     accounts = {"Deployer": operator, "Contributor": contributor, "Borrower": borrower}
-    print("Start oracle_service.py and auto_voter.py before running this demonstration.")
+    print("Keep oracle_service.py and auto_voter.py running; wait for ORACLE READY before starting this demonstration.")
     print_balances(w3, pool, accounts)
 
     print("1. Requesting fresh Bitcoin liquidity from the running oracle...")

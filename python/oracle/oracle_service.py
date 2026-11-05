@@ -1,5 +1,12 @@
+"""Replay the required Bitcoin blocks, then serve balance-update requests.
+
+UTXOs are rebuilt in memory at every start, one block at a time. The shared
+event queue stores Ethereum requests and transactions, not Bitcoin balances.
+"""
+
 import logging
 import os
+from pathlib import Path
 import sys
 import time
 from collections import defaultdict
@@ -9,6 +16,12 @@ from btc_utils import (
 )
 from dotenv import load_dotenv
 from web3 import Web3
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from durable_events import (
+    EventStore, make_web3, process_pending, require_local_chain, scan_events,
+    send_durable, store_identity,
+)
 
 # ─── Logging ─────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
@@ -138,14 +151,6 @@ def sync_bitcoin_blocks(blk_dat_dir: str) -> None:
     logger.info("SYNC complete: %d blocks processed", blocks_processed)
 
 # ─── Phase 2: Ethereum event polling ─────────────────────────────────────────
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from durable_events import (
-    EventStore, make_web3, process_pending, require_local_chain, scan_events,
-    send_durable, store_identity,
-)
-
-
 def send_update(oracle_contract, operator_account, w3, btc_address, balance, store, event_id):
     receipt = send_durable(
         w3, operator_account, oracle_contract.functions.update(btc_address, balance), store, event_id,
@@ -192,6 +197,7 @@ def main():
                        int(os.getenv("DEPLOYMENT_BLOCK", "0")))
     try:
         sync_bitcoin_blocks(blk_dat_dir)
+        logger.info("ORACLE READY: Bitcoin sync complete. You can now run simulate.py.")
         run_polling_loop(oracle_contract, operator_account, w3, store)
     finally:
         store.close()

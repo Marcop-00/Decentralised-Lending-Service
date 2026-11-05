@@ -97,6 +97,17 @@ Start these in separate terminals from the project root:
     ./.venv/bin/python python/oracle/oracle_service.py
     ./.venv/bin/python python/voter/auto_voter.py
 
+The oracle has two phases. At each start it reconstructs the UTXO set **in
+memory**, processing the first 131,000 blocks one at a time. It then serves
+Ethereum balance-update requests using that index. Wait until the oracle prints
+**ORACLE READY** before starting the demo; initial synchronization can take longer
+than the demo's default five-minute timeout. There is no fixed sleep to configure.
+
+No Bitcoin balance or UTXO cache is saved to disk. Restarting the oracle repeats
+the replay. The SQLite event queue described below stores requests and signed
+Ethereum transactions only, so requests made during synchronization can be
+recovered. It is separate from the in-memory Bitcoin index.
+
 Select an address with sufficient capacity from the validated data summary:
 
     ./.venv/bin/python python/simulate.py --btc-address YOUR_VALIDATED_ADDRESS --principal 1
@@ -196,7 +207,8 @@ To regenerate the report after profiling:
     cd docs
     latexmk -pdf -interaction=nonstopmode -halt-on-error report.tex
 
-The complete Geth demo has been verified with the current sources and Bitcoin data.
+The Geth demo recorded in docs/geth-demo.json verifies the 11 October 2026 sources
+and Bitcoin data; its source hashes identify that specific run.
 Before submission, prepare the course ZIP with source, tests, configuration,
 lockfile, scripts and the report
 (maximum five pages). Omit node_modules, .venv, .env, event databases and regenerable
