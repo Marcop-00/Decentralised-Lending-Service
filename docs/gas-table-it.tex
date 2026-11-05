@@ -1,0 +1,35 @@
+\begingroup\fontsize{9}{11}\selectfont
+\renewcommand{\arraystretch}{1.08}
+\par\noindent\begin{tabularx}{\linewidth}{@{}lXr@{}}
+\toprule
+\textbf{Operazione} & \textbf{Scenario} & \textbf{Unità di gas} \\
+\midrule
+\addlinespace[2pt]
+\multicolumn{3}{l}{\cellcolor{Mist}\textbf{\color{Navy}FundingPool / tramite proxy}} \\
+\texttt{contribute()} & Nuovo contributore & 140.923 \\
+\texttt{withdraw()} & Prelievo parziale & 47.933 \\
+\texttt{withdraw()} & Prelievo finale & 32.412 \\
+\texttt{createLoanProposal()} & Nuova proposta & 234.798 \\
+\texttt{voteOnProposal()} & Voto favorevole & 106.936 \\
+\texttt{executeApprovedLoan()} & Proposta approvata & 1.049.274 \\
+\texttt{executeApprovedLoan()} & Proposta respinta & 90.860 \\
+\texttt{claimInterestGain()} & Riscossione del guadagno & 24.691 \\
+\texttt{requestCompensation()} & Compensazione pagata & 52.652 \\
+\texttt{requestCompensation()} & Riserva vuota & 43.786 \\
+\texttt{upgradeToAndCall()} & V2 compatibile & 37.769 \\
+\texttt{terminate()} & Nessun prestito attivo & 36.295 \\
+\addlinespace[2pt]
+\multicolumn{3}{l}{\cellcolor{Mist}\textbf{\color{Navy}LoanContract}} \\
+\texttt{repay()} & Rata parziale & 168.082 \\
+\texttt{repay()} & Rata finale & 90.716 \\
+\texttt{repay()} & Rimborso in ritardo & 138.782 \\
+\texttt{markDefaulted()} & Prestito scaduto & 103.758 \\
+\addlinespace[2pt]
+\multicolumn{3}{l}{\cellcolor{Mist}\textbf{\color{Navy}BitcoinOracle}} \\
+\texttt{requestUpdate()} & Richiesta a pagamento & 25.193 \\
+\texttt{update()} & Primo saldo non nullo & 49.426 \\
+\texttt{update()} & Saldo già presente & 32.326 \\
+\texttt{withdrawFees()} & Riscossione delle commissioni & 30.868 \\
+\bottomrule
+\end{tabularx}\par
+\endgroup

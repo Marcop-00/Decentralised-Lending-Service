@@ -1,0 +1,428 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[italian]{babel}
+\usepackage[default]{sourcesanspro}
+\usepackage{amsmath,microtype,graphicx,booktabs,tabularx,array,enumitem}
+\usepackage[table]{xcolor}
+\usepackage{geometry,fancyhdr,lastpage,listings,hyperref}
+\geometry{left=17mm,right=17mm,top=13mm,bottom=13mm,
+  headheight=18pt,headsep=4mm,footskip=8mm,includeheadfoot}
+\definecolor{Navy}{HTML}{203446}
+\definecolor{Muted}{HTML}{58636C}
+\definecolor{Mist}{HTML}{F3F4F5}
+\definecolor{Rule}{HTML}{C8CDD1}
+\color{black}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{3pt}
+\setlength{\emergencystretch}{1.5em}
+\linespread{1.04}
+\setlist[itemize]{leftmargin=4mm,itemsep=1pt,topsep=2pt,parsep=0pt}
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.12}
+\hypersetup{colorlinks=true,linkcolor=Navy,urlcolor=Navy,pdflang={it-IT},
+  pdftitle={Decentralised Lending Service - Relazione di progetto},
+  pdfauthor={Marco Pernisco},pdfsubject={P2P Systems and Blockchains Lab 2025/26}}
+\pagestyle{fancy}\fancyhf{}
+\fancyhead[L]{\fontsize{8}{10}\selectfont\color{Muted}DECENTRALISED LENDING SERVICE}
+\fancyhead[R]{\fontsize{8}{10}\selectfont\color{Muted}RELAZIONE DI PROGETTO}
+\fancyfoot[L]{\fontsize{8}{10}\selectfont\color{Muted}Marco Pernisco / 683674}
+\fancyfoot[R]{\fontsize{8}{10}\selectfont\color{Muted}\thepage\ /\ \pageref*{LastPage}}
+\renewcommand{\headrulewidth}{0.3pt}
+\newcommand{\entity}[1]{{\small\texttt{#1}}}
+\newcommand{\pagetitle}[1]{{\fontsize{17}{20}\selectfont\bfseries\color{Navy}#1\par}\vspace{2mm}}
+\newcommand{\subhead}[1]{\par\addvspace{2mm}{\fontsize{11.5}{14}\selectfont\bfseries\color{Navy}#1\par}\vspace{0.3mm}}
+\lstnewenvironment{codeblock}{\lstset{
+  basicstyle=\ttfamily\fontsize{9}{10.7}\selectfont,
+  backgroundcolor=\color{Mist},frame=l,rulecolor=\color{Rule},framerule=0.5pt,
+  xleftmargin=3mm,xrightmargin=1mm,framexleftmargin=1.5mm,framesep=1.5mm,
+  aboveskip=4pt,belowskip=4pt,columns=fullflexible,keepspaces=true,
+  breaklines=true,showstringspaces=false}}{}
+
+\begin{document}
+\begingroup
+\centering
+\setlength{\parskip}{1pt}
+\includegraphics[width=36mm]{pisa_logo.png}\par
+\vspace{1mm}
+{\fontsize{20}{23}\selectfont\bfseries\color{Navy}Decentralised Lending Service\par}
+\vspace{0.5mm}
+{\small Marco Pernisco / Matricola 683674\quad
+\textcolor{Muted}{P2P Systems and Blockchains Lab 2025/26}\par}
+\endgroup
+\vspace{1mm}
+\subhead{1. Architettura e protocollo}
+Il servizio raccoglie ETH in un fondo comune e affida ai partecipanti il voto
+sui prestiti. Il \textbf{contributore} deposita, vota, preleva capitale disponibile
+e riscuote interessi o compensazioni. Il \textbf{richiedente} propone le condizioni,
+risolve la proposta e, se approvata, riceve e rimborsa ETH. Un account può avere entrambi i ruoli.
+
+\textbf{Componenti on-chain.} \entity{FundingPoolProxy} conserva ETH e stato;
+\entity{FundingPool} fornisce la logica UUPS, aggiornabile solo dal proprietario.
+I test verificano che lo stato sia preservato. Ogni prestito approvato crea un
+\entity{LoanContract} distinto, con debitore, condizioni e rimborsi propri.
+Aggiornare il pool non cambia il bytecode dei prestiti già creati.
+\entity{BitcoinOracle} memorizza saldi in satoshi ed emette richieste di aggiornamento
+a pagamento; il pool ne legge il saldo quando risolve una proposta.
+
+\textbf{Componenti off-chain.} L'oracolo Python fidato elabora i primi
+\textbf{131.000 blocchi Bitcoin mainnet}, uno alla volta, ricostruendo l'indice
+UTXO \textbf{in memoria}, poi risponde alle richieste Ethereum. Saldi Bitcoin e
+UTXO non sono salvati su disco: ogni riavvio ripete la scansione. Il voter segue
+gli eventi di proposta e vota sempre YES, anche con capitale tutto bloccato. SQLite conserva
+eventi e transazioni firmate, non saldi Bitcoin, per riprendere dopo errori RPC temporanei.
+
+\textbf{Modello di fiducia.} Non si prova la proprietà dei BTC e non li si blocca.
+La liquidità storica Bitcoin è valutata al cambio fisso \textbf{1 BTC = 30 ETH}.
+È un parametro del protocollo, non un prezzo di mercato corrente; il controllo
+del saldo non offre una garanzia Bitcoin esigibile. Il parser controlla collegamento dei blocchi, hash e radici
+Merkle, esclude la ricompensa non spendibile del genesis e rifiuta dati incompleti;
+non è un nodo che verifica l'intero consenso Bitcoin.
+
+\subhead{Votazione e finanziamento}
+I depositi devono superare \textbf{100.000 wei}. Anche chi ha capitale bloccato
+può votare, ma la risoluzione pesa il voto sul \textbf{saldo disponibile corrente}.
+L'astensione vale NO; la parità respinge. Solo il richiedente originario può
+risolvere, dopo almeno \textbf{12 blocchi}. Si può votare fino alla risoluzione:
+\entity{votingDeadlineBlock} indica il primo blocco utile, non la fine del voto.
+Tutte le durate sono differenze di altezza. La proposta specifica capitale,
+tasso di interesse (1--100), durata e indirizzo BTC.
+
+ETH disponibili o liquidità Bitcoin insufficienti chiudono e respingono la
+proposta. L'approvazione chiude il voto e blocca quote proporzionali del capitale
+disponibile dei contributori. I resti della divisione intera riducono il
+\textbf{capitale effettivamente erogato}, senza assegnarli arbitrariamente.
+La percentuale di collateral resta fissata per quel prestito alla creazione.
+
+\subhead{Rimborso, interessi e compensazione}
+Il capitale è \textbf{disponibile} o \textbf{bloccato}; interessi da riscuotere
+e riserva di compensazione sono saldi separati, non prestabili. Solo il debitore
+originario può rimborsare, anche dopo il default. Ogni rata copre capitale e
+interessi in proporzione al debito totale; si può saldare tutto in un pagamento.
+
+Il \textbf{rimborso del capitale} sblocca fondi nel pool, non li invia al wallet.
+Si restituisce prima a chi aveva la quota \emph{iniziale} maggiore; a parità,
+vince l'indirizzo numericamente maggiore. L'ordine si calcola una sola volta.
+Gli \textbf{interessi} sono divisi usando il collateral fisso del prestito:
+una parte entra nella riserva; il resto è un guadagno proporzionale alle quote
+iniziali, riscosso con \entity{claimInterestGain()}. I calcoli cumulativi rendono
+coerenti gli arrotondamenti di capitale, interessi e collateral tra le rate.
+Eccedenze oltre il debito totale e resti della distribuzione degli interessi
+vanno alla riserva. A pagina 4 è riportato un esempio numerico.
+
+\textbf{Successo e default.} Il saldo completo entro il blocco di scadenza ha
+successo; un prestito scaduto e non saldato è segnato fallito da una transazione,
+non dal solo passare del tempo. Il fallimento si conta una volta e non è annullato
+da rimborsi tardivi. Il collateral globale parte dal \textbf{50\%}, resta tra
+\textbf{1 e 100\%}, scende di cinque punti per successo e sale di cinque per
+fallimento; i prestiti esistenti mantengono la propria percentuale.
+
+La \textbf{compensazione} copre solo capitale non restituito, nei limiti della
+riserva. Se vuota, la richiesta registra comunque il default, paga zero e
+conserva il credito per futuri reintegri. Quanto pagato riduce di pari importo
+il diritto a recuperare capitale dal debitore, senza cambiare i pesi degli
+interessi. Solo il proprietario può \textbf{terminare} il servizio, senza prestiti
+attivi; prelievi, interessi e recuperi restano possibili.
+
+\newpage
+\pagetitle{2. Sicurezza e limiti operativi}
+\subhead{Reentrancy: modifica e attacco eseguibile}
+\entity{FundingPoolVulnerable}, usato solo nei test, eredita dal pool reale e
+sostituisce il prelievo con scritture di saldi memorizzati \textbf{dopo} il
+trasferimento esterno:
+\begin{codeblock}
+uint256 beforePosition = totalContributed[msg.sender];
+uint256 beforePool = totalUnlockedFunds;
+(bool sent, ) = payable(msg.sender).call{value: amount}("");
+if (!sent) revert TransferFailed();
+totalContributed[msg.sender] = beforePosition - amount;
+totalUnlockedFunds = beforePool - amount;
+\end{codeblock}
+\entity{ReentrancyAttacker} richiama ricorsivamente \entity{withdraw(amount)}
+dalla funzione di ricezione. In \entity{test/reentrancy.test.ts}, un deposito
+di 1 ETH dell'attaccante permette di sottrarre i 10 ETH del contributore onesto
+dal proxy vulnerabile. Lo stesso attaccante non ruba quei 10 ETH dal proxy
+normale, che aggiorna la contabilità prima del trasferimento. Una semplice
+sottrazione dal saldo corrente dopo la chiamata potrebbe invece causare un
+revert per underflow in Solidity 0.8; le assegnazioni di valori ormai obsoleti
+rendono l'esempio davvero sfruttabile. Le varianti di test non sono mai
+distribuite dallo setup del servizio. Queste prove non garantiscono la sicurezza generale.
+
+\subhead{Guadagno scorretto senza reentrancy}
+Un contributore di maggioranza con \textbf{6 ETH} può approvare un prestito da
+\textbf{10 ETH} a un debitore complice, finanziato anche dai \textbf{4 ETH}
+di un partecipante onesto, e poi non rimborsarlo. Il gruppo colluso guadagna
+\textbf{4 ETH netti}, non 10, prima di gas e altri flussi. Può indicare qualsiasi
+indirizzo BTC abbastanza ricco, perché non si prova la proprietà. Anche la
+priorità dei rimborsi favorisce le quote grandi: con quote 6/4, un rimborso di
+capitale pari a 6 ripristina la posizione maggiore prima che il contributore
+minore recuperi capitale. Sono conseguenze delle regole economiche del protocollo,
+non di una vulnerabilità reentrancy.
+
+\textbf{Limiti.} Le posizioni vuote vengono rimosse, ma il lavoro cresce con il
+numero di contributori e deve rientrare nel limite di gas del blocco. I checkpoint
+rilevano la sostituzione della chain; i conflitti di nonce restano ispezionabili.
+Il recupero dalle riorganizzazioni non è automatico.
+
+\newpage
+\pagetitle{3. Esecuzione del servizio}
+Eseguire i comandi dalla \textbf{radice del progetto}, salvo diversa indicazione.
+Servono una versione Node pari supportata (22.13.0+), Python 3.10+ e
+\textbf{Geth 1.13.14}, client Clique precedente a PoS compatibile con il genesis della rete privata.
+
+\subhead{1. Installare le dipendenze e validare i dati Bitcoin}
+\begin{codeblock}
+./setup.sh
+./.venv/bin/python python/oracle/check_data.py --data-dir bitcoin --summary
+\end{codeblock}
+Lo setup installa le dipendenze Node bloccate e i pacchetti Python, crea
+\entity{.venv}, compila i contratti e scarica Geth. Installazione e download
+del compilatore non già in cache richiedono internet; saltare lo setup se già
+completato. Fornire file mainnet \entity{blk*.dat} decodificati dal genesis
+all'altezza 130.999. Il controllo offline non richiede chiavi o Geth: il successo
+riporta \entity{valid: true}, \textbf{131.000 blocchi}, altezza \textbf{130.999}
+e indirizzi con fondi. Non sostituire dati mancanti o incompleti con saldi fittizi.
+
+\subhead{2. Avviare la blockchain privata / terminale 1}
+\begin{codeblock}
+cd private-chain
+./geth --datadir=./data init project2526genesis.json
+./geth --datadir=./data --keystore=./keystore --networkid=202526 \
+  --http --http.addr=127.0.0.1 --http.port=8545 --http.api=eth,net,web3 \
+  --mine --miner.gasprice=100000000 \
+  --miner.etherbase=d278d247a52c550508ea2b2c9321d816238fb523 \
+  --unlock d278d247a52c550508ea2b2c9321d816238fb523 \
+  --password password.txt --allow-insecure-unlock --ipcdisable
+\end{codeblock}
+Lasciare il nodo attivo. L'RPC è locale; lo sblocco non sicuro degli account
+è previsto per questa chain di laboratorio, non per una distribuzione pubblica.
+
+\subhead{3. Creare gli account e distribuire / terminale 2, radice del progetto}
+\begin{codeblock}
+./.venv/bin/python python/setup.py
+\end{codeblock}
+L'account prefunded fornito \textbf{trasferisce solo ETH} a tre account appena
+generati. Il nuovo deployer crea oracolo, implementazione e proxy inizializzato.
+Lo setup ricompila il bytecode ordinario, verifica chain ID, ricevute, codice e
+inizializzazione, poi scrive configurazioni protette con \entity{DEPLOYMENT\_BLOCK}.
+Ripeterlo crea una distribuzione separata.
+
+\subhead{4. Avviare oracolo e voter / terminali separati}
+\begin{codeblock}
+./.venv/bin/python python/oracle/oracle_service.py
+./.venv/bin/python python/voter/auto_voter.py
+\end{codeblock}
+Attendere \textbf{ORACLE READY}: l'oracolo deve terminare la scansione Bitcoin
+iniziale in memoria. Non c'è un'attesa fissa da configurare; ogni riavvio ripete
+la scansione. Lasciare attivi entrambi i servizi durante la demo e conservare
+le code SQLite dopo errori RPC temporanei: sono separate dall'indice Bitcoin.
+
+\subhead{5. Simulare rimborso e default / altro terminale, radice del progetto}
+\begin{codeblock}
+./.venv/bin/python python/simulate.py \
+  --btc-address 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa --principal 1
+\end{codeblock}
+Questo indirizzo ha \textbf{4.000.000 satoshi} nello snapshot validato, sufficienti
+per 1 ETH al cambio fisso. Con altri dati, scegliere un indirizzo adeguatamente
+finanziato dal riepilogo del controllo, non un segnaposto letterale. Lo scenario A
+rimborsa 1 ETH al 5\% in due rate e riscuote il guadagno; B lascia insoluti 0,5 ETH,
+richiede compensazione e riprova a riserva vuota. Entrambe le proposte attendono
+voti YES e 12 blocchi reali. Saldi, stati e controlli contabili sono stampati dopo
+le modifiche significative.
+
+\textbf{Tempi e ripresa.} I blocchi Clique richiedono circa 10 secondi: prevedere
+alcuni minuti per le due votazioni. \entity{--timeout} imposta i secondi massimi
+\emph{per ogni fase asincrona} (300 predefiniti). In caso di timeout, controllare
+nodo e log dei servizi prima di riprovare; non eliminare chain, chiavi,
+configurazioni o code. La contabilità è spiegata a pagina 4; riusare una
+distribuzione può produrre numeri diversi.
+
+\newpage
+\pagetitle{4. Simulazione: rimborso e default}
+L'esecuzione locale osservata usa \entity{--principal 1}. L'oracolo risponde con
+\textbf{4.000.000 satoshi = 0,04 BTC}, pari a \textbf{1,2 ETH} di capacità al
+cambio di 30 ETH/BTC. I BTC non sono trasferiti né bloccati. Il contributore
+deposita \textbf{50 ETH}: il wallet passa da 100 a circa 50 ETH dopo il gas,
+mentre il pool contiene 50 ETH di capitale disponibile.
+
+\subhead{Primo prestito: 1 ETH, interesse al 5\%, due rate}
+Dopo il voto YES e 12 blocchi, l'approvazione crea e finanzia un contratto
+dedicato. Il pool contiene 49 ETH; il contributore ha \textbf{49 disponibili
++ 1 bloccato}. Il debito è \textbf{1,05 ETH}. Con \textbf{collateral al 50\%},
+ogni rata da 0,525 ETH restituisce 0,5 ETH di capitale e paga 0,025 ETH di
+interessi, divisi a metà tra riserva e guadagno del contributore:
+
+\begin{tabularx}{\linewidth}{@{}Xrr@{}}
+\toprule
+\textbf{Destinazione} & \textbf{Ogni rata (ETH)} & \textbf{Totale (ETH)}\\\midrule
+Capitale ripristinato come disponibile & 0,5000 & 1,0000\\
+Interessi accreditati alla riserva & 0,0125 & 0,0250\\
+Interessi accreditati come guadagno & 0,0125 & 0,0250\\\midrule
+Pagamento del debitore & 0,5250 & 1,0500\\\bottomrule
+\end{tabularx}
+
+Il prestito diventa \entity{Repaid}: il capitale disponibile torna a 50 ETH e
+quello bloccato a zero. Il contributore riscuote 0,025 ETH di guadagno; nel pool
+restano \textbf{50 ETH di capitale + 0,025 ETH di riserva}. Il collateral globale
+scende dal 50 al \textbf{45\%}; quello del primo prestito resta al 50\%.
+
+\subhead{Secondo prestito: la scadenza non esegue transazioni}
+Una nuova proposta riceve YES ed è risolta dopo altri 12 blocchi. Eroga
+\textbf{0,5 ETH} al 10\%, con collateral fisso al \textbf{45\%}, e non viene
+rimborsata intenzionalmente. Il finanziamento avviene al blocco \textbf{328},
+la scadenza è \textbf{331}. Al 332 il prestito è scaduto ma resta memorizzato
+come \entity{Funded}: il solo avanzare dell'altezza non esegue codice.
+La transazione di compensazione al blocco \textbf{333} registra
+\entity{Defaulted}, azzera i prestiti attivi, conta un fallimento e riporta
+il collateral globale al \textbf{50\%}. Quello del secondo prestito resta al 45\%.
+
+\subhead{Compensazione: riserva limitata e credito residuo}
+Il capitale insoluto è 0,5 ETH, ma la riserva contiene solo 0,025 ETH.
+Il contributore riceve \textbf{0,025 ETH direttamente nel wallet}; il credito
+residuo è \textbf{0,475 ETH}. Il tentativo al blocco \textbf{334} paga zero
+senza cancellare il credito né contare il fallimento una seconda volta.
+
+\begin{tabularx}{\linewidth}{@{}Xrr@{}}
+\toprule
+\textbf{Contabilità del pool (ETH)} & \textbf{Prima} & \textbf{Dopo / nuovo tentativo}\\\midrule
+Posizione totale del contributore & 50,000 & 49,975\\
+Capitale disponibile del contributore & 49,500 & 49,500\\
+Capitale bloccato del contributore & 0,500 & 0,475\\
+Riserva di compensazione & 0,025 & 0\\
+ETH effettivamente detenuti dal pool & 49,525 & 49,500\\\bottomrule
+\end{tabularx}
+
+\textbf{Interpretazione.} I 0,475 ETH bloccati sono un \textbf{credito non
+recuperato, non denaro prelevabile}. La compensazione riduce sia la posizione
+totale sia il capitale bloccato, lasciando invariato il disponibile:
+$49{,}975-0{,}475=49{,}5$ ETH. Reintegri della riserva o rimborsi tardivi possono
+consentire altri recuperi, ma non sono garantiti. \textbf{Zero prestiti attivi
+non significa zero perdite.}
+
+\subhead{Saldi dei wallet e numero di transazioni}
+Il wallet finale del contributore contiene \textbf{50,0499454037 ETH}, con il gas
+già considerato: vi sono arrivati guadagno e compensazione, mentre 49,5 ETH
+restano disponibili nel pool. Questa esecuzione aggiunge \textbf{11 transazioni
+della demo + 1 aggiornamento dell'oracolo + 2 voti YES = 14}; lo setup ne aggiunge
+sei (tre trasferimenti e tre distribuzioni). L'oracolo contiene 0,0000098852 ETH
+perché anche una precedente richiesta per un indirizzo inadeguato aveva pagato
+la commissione; quella coppia richiesta/risposta non rientra nelle 14 transazioni.
+Blocchi e saldi sono quelli dell'esecuzione osservata; riusare una distribuzione
+o cambiare dati può modificarli.
+
+\newpage
+\pagetitle{5. Test e valutazione del gas}
+\subhead{5.1 Esecuzione e risultati dei test}
+Dopo lo setup delle dipendenze (pagina 3), lavorare dalla \textbf{radice del progetto}.
+\textbf{Non servono Geth, oracolo, voter, chiavi, configurazioni dei servizi o
+file Bitcoin reali.} Hardhat usa chain simulate isolate; Python usa dati
+temporanei e servizi simulati con mock. I test non modificano la distribuzione
+privata esistente. Non eseguire \entity{python/setup.py} soltanto per fare i test.
+
+\subhead{Compilazione e suite complete}
+\begin{codeblock}
+npm run typecheck
+npm test
+./.venv/bin/python -m unittest discover -s python/tests -v
+\end{codeblock}
+\textbf{Typecheck:} compila i contratti ed esegue \entity{tsc --noEmit}; basta
+l'uscita senza errori, anche se TypeScript non stampa messaggi.
+\textbf{Contratti:} l'esito atteso è \textbf{34 passing}, cioè \textbf{4 test
+Solidity + 30 Node.js/TypeScript}. Un test Solidity usa \textbf{256 input
+generati} mediante fuzzing: sono ripetizioni dello stesso test, non 256 test
+aggiuntivi. \textbf{Python:} attendersi \textbf{Ran 49 tests} e \textbf{OK}.
+
+Gli scenari dei contratti coprono vincoli del voto e variazioni di saldo, soglie
+BTC, resti di allocazione, rate, ordine dei rimborsi, interessi, default,
+compensazioni ripetute, autorizzazioni, terminazione, aggiornamenti e reentrancy.
+Controlli espliciti verificano emittenti e parametri degli eventi e contratti
+indipendenti per due debitori. I test Python coprono parser, esclusione del
+genesis, UTXO, indicizzazione atomica, ripresa di eventi e transazioni, voter
+sempre favorevole, protezioni dello setup e compensazione della demo. I saldi
+simulati verificano la logica, non validano il dataset Bitcoin reale.
+
+\subhead{Eseguire un controllo mirato}
+\begin{codeblock}
+npm test -- test/advanced_behaviors.test.ts
+npm test -- test/events_and_isolation.test.ts
+npm test -- test/reentrancy.test.ts
+npm test -- test/upgrade.test.ts
+npm test -- contracts/test/LoanContract.t.sol
+./.venv/bin/python -m unittest discover -s python/tests \
+  -p 'test_demo_scenarios.py' -v
+\end{codeblock}
+Scegliere il comando per: contabilità; eventi e indipendenza dei prestiti;
+reentrancy; aggiornamenti; regole native del prestito; oppure \textbf{sei
+controlli offline della demo}. Gli eventi includono un nuovo tentativo di
+compensazione che non deve emettere un secondo default. Il test di indipendenza
+rimborsa due prestiti con debitori diversi e verifica che nessuno alteri
+condizioni, rimborsi o quote dell'altro.
+
+\subhead{Esaminare la copertura del codice}
+\begin{codeblock}
+npm run test:coverage
+\end{codeblock}
+\textbf{Coverage:} attendersi \textbf{34 passing} e percentuali di righe e
+istruzioni coperte. Aprire \entity{coverage/html/index.html} nel browser.
+È copertura dei contratti, non Python né prova di sicurezza. Il bytecode
+strumentato altera il gas: questa modalità lascia intenzionalmente invariate
+le misure ordinarie. Comandi di profilazione e tabella sono a pagina 6;
+non usare il gas della coverage per valutare i costi.
+
+\subhead{Riconoscere il successo e risolvere i problemi}
+Un test può causare un revert e passare comunque: verifica il rifiuto di
+un'operazione non valida. Il test reentrancy passa solo se la variante insicura
+è svuotata \emph{e} quella normale protegge i fondi onesti. Leggere il riepilogo
+finale: asserzioni fallite, \entity{FAIL}/\entity{ERROR} o uscita non nulla richiedono
+indagini. I conteggi descrivono questa versione e possono crescere con nuovi test.
+
+\textbf{Moduli o interprete mancanti:} usare \entity{./.venv/bin/python} e verificare
+cartella, versione Node e completamento di \entity{./setup.sh}.
+\textbf{Test fallito:} rieseguire il file e leggere il primo scarto tra atteso
+e ottenuto, senza eliminare dati della chain o code.
+\textbf{Dati Bitcoin mancanti:} correggere il dataset per controllo e demo
+(pagina 3); i mock non lo validano. La demo reale è una prova di integrazione:
+non sostituisce i test automatici, né viceversa.
+
+\newpage
+\pagetitle{5. Test e valutazione del gas (continua)}
+\subhead{5.2 Misurazione e interpretazione del gas}
+I test funzionali verificano il comportamento; la profilazione misura il costo
+delle operazioni. Entrambi usano lo stesso progetto Hardhat e gli stessi
+contratti, con bytecode ordinario per le misurazioni.
+
+\textbf{Ambiente.} Hardhat 3.18.1, TypeScript 6.0.3, \entity{node:test}, viem
+2.57.3; Solidity 0.8.24, ottimizzatore con \entity{runs=200}, EVM/hardfork
+\textbf{Berlin}, chain ID simulato 202526. Lo scenario ha un solo contributore.
+
+\subhead{Riprodurre le misure}
+\begin{codeblock}
+npm run test:gas
+./.venv/bin/python docs/render_gas_table.py --language it
+\end{codeblock}
+L'esito atteso è \textbf{1 passing}: un test di profilazione per \textbf{20 scenari}.
+Registra \entity{gasUsed} delle ricevute, incluso il gas intrinseco, in
+\entity{docs/gas-measurements.json}; il comando Python genera
+\entity{docs/gas-table-it.tex}. Ricompilare questa relazione per aggiornare
+la tabella. Anche \entity{npm test} include la profilazione e riscrive il JSON.
+
+\subhead{Costi del gas misurati}
+\input{gas-table-it.tex}
+
+\subhead{Leggere i valori e calibrare la commissione dell'oracolo}
+I valori sono \textbf{unità di gas}, non wei né il limite di gas inviato.
+La commissione in wei è \textbf{gas consumato per prezzo del gas}.
+Le letture tramite \entity{eth\_call} non richiedono una commissione di transazione.
+
+\textbf{Commissione dell'oracolo:}
+$49\,426\times0{,}1\text{ gwei}=4\,942\,600\,000\,000$ wei.
+La calibrazione usa il primo saldo non nullo di un indirizzo storico di 34
+caratteri; aggiornare una voce esistente costa meno. Cambiare bytecode o
+impostazioni richiede una nuova calibrazione.
+
+\textbf{Validità delle misure.} Sono risultati riproducibili di scenari specifici,
+non limiti massimi universali. Dipendono dallo stato dello storage e dal numero
+di contributori: il lavoro del pool può crescere con quest'ultimo. La coverage
+esegue gli stessi percorsi con bytecode strumentato senza sovrascrivere il JSON
+ordinario; per valutare i costi usare il comando di profilazione riportato sopra.
+\end{document}

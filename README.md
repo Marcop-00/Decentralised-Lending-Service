@@ -96,7 +96,8 @@ emit another default. The isolation check uses two borrowers and verifies that
 repaying either loan leaves the other loan's terms, repayments and positions unchanged.
 If a test fails, rerun its file and inspect the first failed assertion. Do not
 delete private-chain data, keys or event queues to troubleshoot isolated tests.
-Page 4 of the report contains the step-by-step testing guide.
+Pages 5-6 of the report group the testing guide and gas evaluation together:
+test commands/results first, then profiling commands, the gas table and its interpretation.
 
 ## Validate Bitcoin data before the real demo
 
@@ -277,9 +278,11 @@ within the block gas limit is outside this didactic design.
 | python/tests/ | Offline tests for Bitcoin data, service reliability and demo invariants. |
 | private-chain/ | Course genesis, supplied account and local Geth installation/data. |
 | docs/report.tex, docs/report.pdf | Source and final report for submission. |
+| docs/report-it.tex, docs/report-it.pdf | Italian translation of the report, with the same structure, commands and measurements. |
 | docs/guida-orale.tex, docs/guida-orale.pdf | Original Italian study guide: architecture, accounting, demo and oral-exam questions. |
 | docs/default-demo-verification.json | New isolated Geth verification of both demo scenarios, with source hashes and final accounting. |
 | docs/gas-measurements.json, docs/gas-table.tex | Measured gas costs and the generated report table. |
+| docs/gas-table-it.tex | Italian gas table generated from the same measurements with --language it. |
 
 setup.sh installs the development tools; python/setup.py deploys the application.
 Neither test fixtures nor test contracts are alternative service implementations.
@@ -297,16 +300,30 @@ To regenerate the report after profiling:
     cd docs
     latexmk -pdf -interaction=nonstopmode -halt-on-error report.tex
 
+The separate Italian translation is docs/report-it.pdf; the English report is
+not replaced. To regenerate its localized gas table and PDF from the project root:
+
+    ./.venv/bin/python docs/render_gas_table.py --language it
+    cd docs
+    latexmk -pdf -interaction=nonstopmode -halt-on-error report-it.tex
+
+Without --language, the gas-table generator keeps producing the original
+English table. Both languages read the same docs/gas-measurements.json; Italian
+number formatting uses decimal commas and thousands separators as appropriate.
+
 The separate Italian oral-exam guide is a study aid, not part of the report's
 page limit. It explains this implementation (not the colleague's project), with
 plain-language explanations, worked examples, numbered excerpts loaded directly
 from the real source files, and questions/model answers for a code-reading oral exam.
 The LaTeX source includes excerpts by line range; recheck those ranges if code moves.
 To regenerate it, run `latexmk -pdf -interaction=nonstopmode -halt-on-error guida-orale.tex`
-from docs/. The current report has five pages: architecture/protocol, gas/security,
-the service user manual, the testing guide, and an observed-run walk-through with
-final accounting. Its compact layout meets the assignment's five-page report
-limit; the separate oral-exam study guide remains complete and unchanged.
+from docs/. The current report has six pages: architecture/protocol, security,
+the service user manual, an observed-run walk-through with final accounting,
+and a two-page section combining testing and gas evaluation. The sixth page
+was added at the author's request to preserve readability. The assignment
+formally limits the report to five pages, so this longer version needs the
+instructor's acceptance or must be shortened before submission. The separate
+oral-exam study guide remains complete and unchanged.
 
 The Geth demo recorded in docs/geth-demo.json verifies the 11 October 2026 sources
 and Bitcoin data; its source hashes identify that specific run.

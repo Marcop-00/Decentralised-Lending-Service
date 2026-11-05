@@ -24,7 +24,7 @@
   pdfauthor={Marco Pernisco},pdfsubject={P2P Systems and Blockchains Lab 2025/26}}
 \pagestyle{fancy}\fancyhf{}
 \fancyhead[L]{\fontsize{8}{10}\selectfont\color{Muted}DECENTRALISED LENDING SERVICE}
-\fancyhead[R]{\fontsize{8}{10}\selectfont\color{Muted}PROJECT REPORT / TRACE 1.1}
+\fancyhead[R]{\fontsize{8}{10}\selectfont\color{Muted}PROJECT REPORT}
 \fancyfoot[L]{\fontsize{8}{10}\selectfont\color{Muted}Marco Pernisco / 683674}
 \fancyfoot[R]{\fontsize{8}{10}\selectfont\color{Muted}\thepage\ /\ \pageref*{LastPage}}
 \renewcommand{\headrulewidth}{0.3pt}
@@ -73,8 +73,7 @@ fully locked capital. SQLite persists service events and signed transactions,
 not Bitcoin balances; retries survive temporary RPC failures.
 
 \textbf{Trust model.} BTC ownership is not proved and BTC are not locked.
-Historical liquidity uses the fixed rate \textbf{1 BTC = 30 ETH}; this is the
-trace's didactic simplification, not a live price or enforceable Bitcoin guarantee.
+Historical Bitcoin liquidity is evaluated at the fixed rate \textbf{1 BTC = 30 ETH}.
 The parser checks connected blocks, hashes and Merkle roots, excludes the
 unspendable genesis reward and refuses incomplete input; it is not a full
 Bitcoin consensus node.
@@ -108,7 +107,7 @@ collateral enters the reserve; the rest becomes contributor gains proportional
 to initial shares, collected through \entity{claimInterestGain()}.
 Cumulative payment calculations preserve principal, interest and collateral
 rounding across installments. Surplus above the full debt and interest
-distribution dust enter the reserve. Page 5 gives a numerical example.
+distribution dust enter the reserve. Page 4 gives a numerical example.
 
 \textbf{Success/default.} Full repayment by the due block succeeds; an overdue,
 unpaid loan is marked failed by a transaction, not by time passing alone.
@@ -122,25 +121,10 @@ An empty-reserve request still records default, pays zero and preserves the
 claim for future refills. Actual compensation forfeits the same amount of
 future principal recovery without changing original interest weights.
 Only the owner may \textbf{terminate} the service, with no active loans;
-withdrawal, interest claims and recovery remain available. The installment
-split, minimum voting period and zero-reserve behavior are documented
-interpretations of the trace's less explicit wording.
+withdrawal, interest claims and recovery remain available.
 
 \newpage
-\pagetitle{2. Gas evaluation and security}
-\textbf{Environment.} Hardhat 3.18.1, TypeScript 6.0.3, \entity{node:test},
-viem 2.57.3; Solidity 0.8.24, optimizer 200 runs, EVM/hardfork
-\textbf{Berlin}, simulated chain ID 202526. \textbf{20 scenarios} measure
-receipt \entity{gasUsed}, including intrinsic gas, with one contributor.
-
-\input{gas-table.tex}
-
-{\small Source: \entity{docs/gas-measurements.json}. Values are gas units, not
-wei or universal upper bounds; costs depend on storage and contributor count.
-Getters called through \entity{eth\_call} incur no paid transaction fee.
-\textbf{Oracle fee:} $49,426\times0.1\text{ gwei}=4,942,600,000,000$ wei.
-Calibration uses a first nonzero update of a 34-character historical address;
-existing-slot updates cost less. Bytecode/settings changes require recalibration.\par}
+\pagetitle{2. Security and operational limits}
 
 \subhead{Reentrancy: modification and executable attack}
 The test-only \entity{FundingPoolVulnerable} inherits the real pool and replaces
@@ -169,7 +153,7 @@ then default. The colluding group captures a net \textbf{4 ETH}, not 10 ETH,
 before gas and other flows. Any sufficiently funded BTC address can be cited
 because ownership is not proved. Priority refunds also favor large positions:
 with backing 6/4, a base repayment of 6 restores the larger position before
-the smaller contributor recovers principal. These follow the specified
+the smaller contributor recovers principal. These follow the protocol's
 economic rules, rather than a reentrancy flaw.
 
 \textbf{Limits.} Empty positions are removed, but work scales with contributors
@@ -180,7 +164,7 @@ conflicts remain inspectable. Reorganization recovery is not automatic.
 \pagetitle{3. Run the service}
 Run commands from the \textbf{project root}, unless indicated otherwise.
 Use a supported even-numbered Node release (22.13.0+), Python 3.10+ and
-\textbf{Geth 1.13.14}, the pre-PoS Clique client matching the course genesis.
+\textbf{Geth 1.13.14}, the pre-PoS Clique client matching the private chain's genesis.
 
 \subhead{1. Install dependencies and validate Bitcoin data}
 \begin{codeblock}
@@ -195,7 +179,7 @@ height 130,999. The offline checker needs no keys or Geth: success reports
 \entity{valid: true}, \textbf{131,000 blocks} and height \textbf{130,999}, and
 lists funded addresses. Missing/incomplete data must not be replaced by fake balances.
 
-\subhead{2. Start the course private chain / terminal 1}
+\subhead{2. Start the private chain / terminal 1}
 \begin{codeblock}
 cd private-chain
 ./geth --datadir=./data init project2526genesis.json
@@ -246,88 +230,10 @@ Balances, loan states and accounting checks are printed after significant change
 minutes for both voting periods. \entity{--timeout} sets the maximum seconds
 \emph{per asynchronous step} (default 300). On timeout, check node and service
 logs before retrying; do not delete chain data, keys, environments or event queues.
-The expected accounting is explained on page 5; reused deployments may differ.
+The expected accounting is explained on page 4; reused deployments may differ.
 
 \newpage
-\pagetitle{4. Run and interpret the tests}
-After dependency setup (page 3), run from the \textbf{project root}.
-\textbf{No Geth, oracle, voter, keys, service environments or real Bitcoin
-files are needed.} Hardhat uses isolated simulated chains; Python tests use
-temporary data and mocked external services. They do not alter the existing
-private-chain deployment. Do not run \entity{python/setup.py} just to test.
-
-\subhead{Compilation and complete test suites}
-\begin{codeblock}
-npm run typecheck
-npm test
-./.venv/bin/python -m unittest discover -s python/tests -v
-\end{codeblock}
-\textbf{Typecheck:} builds contracts and runs \entity{tsc --noEmit}; successful
-exit with no errors is sufficient, even if TypeScript prints nothing.
-\textbf{Contracts:} expect \textbf{34 passing}, comprising \textbf{4 Solidity
-+ 30 Node.js/TypeScript tests}. A Solidity fuzz test uses \textbf{256 generated
-inputs}; these are repetitions of one test, not 256 extra tests.
-\textbf{Python:} expect \textbf{Ran 49 tests} and \textbf{OK}.
-
-Contract scenarios cover voting boundaries and changing balances, BTC thresholds,
-allocation dust, installments, refund order, interest, defaults, repeated
-compensation, access, termination, upgrades and reentrancy. Explicit checks
-validate event emitters/arguments and independent contracts for two borrowers.
-Python checks cover parsing, genesis exclusion, UTXOs, atomic indexing, durable
-event/transaction retries, the always-YES voter, setup safeguards and demo
-compensation. Mocked balances test contract logic, not the real Bitcoin dataset.
-
-\subhead{Select a focused check}
-\begin{codeblock}
-npm test -- test/advanced_behaviors.test.ts
-npm test -- test/events_and_isolation.test.ts
-npm test -- test/reentrancy.test.ts
-npm test -- test/upgrade.test.ts
-npm test -- contracts/test/LoanContract.t.sol
-./.venv/bin/python -m unittest discover -s python/tests \
-  -p 'test_demo_scenarios.py' -v
-\end{codeblock}
-Choose the relevant command: accounting; events and loan isolation; reentrancy;
-upgrades; native loan rules; or \textbf{six offline demo checks}. Event checks
-include a compensation retry that must not emit another default. Isolation
-checks repay two loans with different borrowers and ensure that neither changes
-the other loan's terms, repayments or contributor positions.
-
-\subhead{Reproduce gas costs and inspect coverage}
-\begin{codeblock}
-npm run test:gas
-./.venv/bin/python docs/render_gas_table.py
-npm run test:coverage
-\end{codeblock}
-\textbf{Gas:} expect \textbf{1 passing} profiling test for \textbf{20 scenarios}.
-It writes \entity{docs/gas-measurements.json}; the Python command regenerates
-\entity{docs/gas-table.tex}. Recompile the report after updating the table.
-The full \entity{npm test} run also includes profiling and rewrites the JSON.
-Costs in wei equal receipt gas used times gas price, not the submitted gas limit.
-
-\textbf{Coverage:} expect \textbf{34 passing} and line/statement percentages.
-Open \entity{coverage/html/index.html} in a browser. This is contract coverage,
-not Python coverage or proof of security. Instrumented bytecode changes gas:
-coverage deliberately leaves ordinary gas measurements unchanged. Use the
-profiling command, not coverage gas, for cost evaluation.
-
-\subhead{Recognize success and troubleshoot}
-A test may deliberately trigger a revert and still pass: it checks rejection
-of an invalid operation. The reentrancy test passes only if the unsafe variant
-is drained \emph{and} the normal pool protects honest funds. Read the final
-summary; failed assertions, \entity{FAIL}/\entity{ERROR} or a nonzero exit status
-need investigation. Counts describe this version and may change as tests are added.
-
-\textbf{Missing modules/interpreter:} check the working directory, supported Node
-version and completed \entity{./setup.sh}; use \entity{./.venv/bin/python}.
-\textbf{Failed test:} rerun its file and inspect the first expected/actual mismatch.
-Do not delete private-chain data or event queues to fix isolated tests.
-\textbf{Missing Bitcoin input:} repair the dataset for the separate checker/demo
-(page 3); passing mocked tests does not validate those files. The real demo is
-an integration exercise, not a substitute for automated tests or vice versa.
-
-\newpage
-\pagetitle{5. Demonstration: repayment and default}
+\pagetitle{4. Demonstration: repayment and default}
 This observed local run uses \entity{--principal 1}. The fresh oracle response
 is \textbf{4,000,000 satoshi = 0.04 BTC}, equivalent to \textbf{1.2 ETH} of
 capacity at 30 ETH/BTC. BTC are not transferred or locked. The contributor
@@ -397,4 +303,115 @@ The oracle holds 0.0000098852 ETH because an earlier unsuccessful address
 request also paid its fee. That earlier request/response pair is outside this
 run's 14 transactions. Block numbers and wallet values belong to this observed
 run; reused deployments and different input can change them.
+
+\newpage
+\pagetitle{5. Testing and gas evaluation}
+\subhead{5.1 Test execution and results}
+After dependency setup (page 3), run from the \textbf{project root}.
+\textbf{No Geth, oracle, voter, keys, service environments or real Bitcoin
+files are needed.} Hardhat uses isolated simulated chains; Python tests use
+temporary data and mocked external services. They do not alter the existing
+private-chain deployment. Do not run \entity{python/setup.py} just to test.
+
+\subhead{Compilation and complete test suites}
+\begin{codeblock}
+npm run typecheck
+npm test
+./.venv/bin/python -m unittest discover -s python/tests -v
+\end{codeblock}
+\textbf{Typecheck:} builds contracts and runs \entity{tsc --noEmit}; successful
+exit with no errors is sufficient, even if TypeScript prints nothing.
+\textbf{Contracts:} expect \textbf{34 passing}, comprising \textbf{4 Solidity
++ 30 Node.js/TypeScript tests}. A Solidity fuzz test uses \textbf{256 generated
+inputs}; these are repetitions of one test, not 256 extra tests.
+\textbf{Python:} expect \textbf{Ran 49 tests} and \textbf{OK}.
+
+Contract scenarios cover voting boundaries and changing balances, BTC thresholds,
+allocation dust, installments, refund order, interest, defaults, repeated
+compensation, access, termination, upgrades and reentrancy. Explicit checks
+validate event emitters/arguments and independent contracts for two borrowers.
+Python checks cover parsing, genesis exclusion, UTXOs, atomic indexing, durable
+event/transaction retries, the always-YES voter, setup safeguards and demo
+compensation. Mocked balances test contract logic, not the real Bitcoin dataset.
+
+\subhead{Select a focused check}
+\begin{codeblock}
+npm test -- test/advanced_behaviors.test.ts
+npm test -- test/events_and_isolation.test.ts
+npm test -- test/reentrancy.test.ts
+npm test -- test/upgrade.test.ts
+npm test -- contracts/test/LoanContract.t.sol
+./.venv/bin/python -m unittest discover -s python/tests \
+  -p 'test_demo_scenarios.py' -v
+\end{codeblock}
+Choose the relevant command: accounting; events and loan isolation; reentrancy;
+upgrades; native loan rules; or \textbf{six offline demo checks}. Event checks
+include a compensation retry that must not emit another default. Isolation
+checks repay two loans with different borrowers and ensure that neither changes
+the other loan's terms, repayments or contributor positions.
+
+\subhead{Inspect code coverage}
+\begin{codeblock}
+npm run test:coverage
+\end{codeblock}
+\textbf{Coverage:} expect \textbf{34 passing} and line/statement percentages.
+Open \entity{coverage/html/index.html} in a browser. This is contract coverage,
+not Python coverage or proof of security. Instrumented bytecode changes gas:
+coverage deliberately leaves ordinary gas measurements unchanged. The profiling
+commands and measurements are on page 6; do not use coverage gas for costs.
+
+\subhead{Recognize success and troubleshoot}
+A test may deliberately trigger a revert and still pass: it checks rejection
+of an invalid operation. The reentrancy test passes only if the unsafe variant
+is drained \emph{and} the normal pool protects honest funds. Read the final
+summary; failed assertions, \entity{FAIL}/\entity{ERROR} or a nonzero exit status
+need investigation. Counts describe this version and may change as tests are added.
+
+\textbf{Missing modules/interpreter:} check the working directory, supported Node
+version and completed \entity{./setup.sh}; use \entity{./.venv/bin/python}.
+\textbf{Failed test:} rerun its file and inspect the first expected/actual mismatch.
+Do not delete private-chain data or event queues to fix isolated tests.
+\textbf{Missing Bitcoin input:} repair the dataset for the separate checker/demo
+(page 3); passing mocked tests does not validate those files. The real demo is
+an integration exercise, not a substitute for automated tests or vice versa.
+
+\newpage
+\pagetitle{5. Testing and gas evaluation (continued)}
+\subhead{5.2 Gas measurement and interpretation}
+Functional tests check that operations behave correctly; gas profiling measures
+their execution cost. Both use the same Hardhat project and contract
+implementation, with ordinary bytecode for measurements.
+
+\textbf{Environment.} Hardhat 3.18.1, TypeScript 6.0.3, \entity{node:test},
+viem 2.57.3; Solidity 0.8.24, optimizer 200 runs, EVM/hardfork
+\textbf{Berlin}, simulated chain ID 202526. The scenario has one contributor.
+
+\subhead{Reproduce the measurements}
+\begin{codeblock}
+npm run test:gas
+./.venv/bin/python docs/render_gas_table.py
+\end{codeblock}
+Expect \textbf{1 passing} profiling test covering \textbf{20 operation scenarios}.
+It records receipt \entity{gasUsed}, including intrinsic gas, in
+\entity{docs/gas-measurements.json}; the Python command regenerates
+\entity{docs/gas-table.tex}. Recompile the report to refresh this table.
+The full \entity{npm test} run also includes profiling and rewrites the JSON.
+
+\subhead{Measured gas costs}
+\input{gas-table.tex}
+
+\subhead{Read the values and calibrate the oracle fee}
+Values are \textbf{gas units}, not wei and not the submitted transaction gas
+limit. The fee in wei is \textbf{gas used times gas price}. Getters invoked
+through \entity{eth\_call} incur no paid transaction fee.
+
+\textbf{Oracle fee:} $49,426\times0.1\text{ gwei}=4,942,600,000,000$ wei.
+Calibration uses a first nonzero update of a 34-character historical address;
+existing-slot updates cost less. Bytecode/settings changes require recalibration.
+
+\textbf{Scope.} These are reproducible scenario measurements, not universal
+upper bounds. Costs depend on storage state and contributor count; in
+particular, pool work can grow with the number of contributors. Coverage uses
+instrumented bytecode, so it exercises these paths without overwriting the
+ordinary gas JSON. Use the profiling command above for cost evaluation.
 \end{document}
