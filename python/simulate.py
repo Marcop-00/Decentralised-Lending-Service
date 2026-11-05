@@ -1,4 +1,4 @@
-"""Exercise the real oracle and voting services on the course's local chain."""
+"""Demonstrate repayment, default and compensation using the real local services."""
 
 import argparse
 import json
@@ -80,20 +80,119 @@ def wait_for_fresh_balance(w3, oracle, request_event, btc_address, timeout):
     return int(event["args"]["balanceInSatoshi"])
 
 
+def verify_state(description, checks):
+    failed = [name for name, correct in checks.items() if not correct]
+    if failed:
+        raise RuntimeError(f"{description}: unexpected state: {', '.join(failed)}")
+
+
+def create_demo_loan(w3, pool, accounts, btc_address, principal, *, rate, duration, timeout):
+    borrower, contributor = accounts["Borrower"], accounts["Contributor"]
+    receipt = send_tx(w3, borrower, pool.functions.createLoanProposal(
+        borrower.address, btc_address, principal, rate, duration, 12,
+    ))
+    proposed = single_event(pool.events.LoanProposed(), receipt)
+    proposal_id = proposed["args"]["proposalId"]
+    resolution_block = proposed["args"]["votingDeadlineBlock"]
+    print(f"Proposal {proposal_id}; earliest resolution block {resolution_block}")
+    print_balances(w3, pool, accounts)
+
+    wait_until(lambda: pool.functions.hasVoted(proposal_id, contributor.address).call(),
+               timeout, "the configured contributor's vote")
+    if not pool.functions.voteSupport(proposal_id, contributor.address).call():
+        raise RuntimeError("The configured contributor recorded NO instead of the required YES")
+    print("The configured contributor has voted YES.")
+    print_balances(w3, pool, accounts)
+    wait_until(lambda: w3.eth.block_number >= resolution_block, timeout, "12 voting blocks")
+    receipt = send_tx(w3, borrower, pool.functions.executeApprovedLoan(proposal_id))
+    approved = pool.events.LoanApproved().process_receipt(receipt, errors=DISCARD)
+    if len(approved) != 1:
+        rejected = pool.events.LoanRejected().process_receipt(receipt, errors=DISCARD)
+        reason = rejected[0]["args"]["reason"] if rejected else "no unique approval event"
+        raise RuntimeError(f"Proposal closed without a loan: {reason}")
+    loan = get_contract(w3, "LoanContract", approved[0]["args"]["loanContract"])
+    print(f"Loan created at {loan.address}")
+    print_balances(w3, pool, accounts)
+    print_loan_state(w3, pool, loan, proposal_id, contributor)
+    return proposal_id, loan
+
+
+def print_loan_state(w3, pool, loan, proposal_id, contributor):
+    status_names = ("Created", "Funded", "Repaid", "Defaulted")
+    status = int(loan.functions.status().call())
+    print(f"Loan {proposal_id}: {status_names[status]}; current block={w3.eth.block_number}; due block={loan.functions.dueBlock().call()}")
+    print(f"  Actual principal: {loan.functions.principal().call()} wei; collateral snapshot: {loan.functions.collateralPercentage().call()}%")
+    print(f"  Repaid principal: {loan.functions.repaidPrincipal().call()} wei; interest: {loan.functions.repaidInterest().call()} wei")
+    print(f"  Contributor's remaining principal claim: {pool.functions.loanContributions(proposal_id, contributor.address).call()} wei")
+
+
+def wait_for_expiry(w3, loan, timeout):
+    due_block = loan.functions.dueBlock().call()
+    wait_until(lambda: w3.eth.block_number > due_block, timeout,
+               f"loan expiry (a block strictly greater than {due_block})")
+
+
+def compensation_state(w3, pool, loan, proposal_id, contributor):
+    return {
+        "owed": pool.functions.loanContributions(proposal_id, contributor.address).call(),
+        "locked": pool.functions.lockedContributions(contributor.address).call(),
+        "contributed": pool.functions.totalContributed(contributor.address).call(),
+        "disposable": pool.functions.unlockedBalanceOf(contributor.address).call(),
+        "pool_disposable": pool.functions.totalUnlockedFunds().call(),
+        "reserve": pool.functions.compensationPoolBalance().call(),
+        "failed_count": pool.functions.failedLoanCount().call(),
+        "collateral": pool.functions.collateralPercentage().call(),
+        "active": pool.functions.activeLoanCount().call(),
+        "failed": pool.functions.isLoanFailed(proposal_id).call(),
+        "resolved": pool.functions.loanResolved(loan.address).call(),
+        "status": loan.functions.status().call(),
+        "cash": w3.eth.get_balance(pool.address),
+    }
+
+
+def claim_demo_compensation(w3, pool, loan, proposal_id, contributor):
+    before = compensation_state(w3, pool, loan, proposal_id, contributor)
+    receipt = send_tx(w3, contributor, pool.functions.requestCompensation(loan.address))
+    event = single_event(pool.events.CompensationRequested(), receipt)
+    paid = int(event["args"]["amount"])
+    after = compensation_state(w3, pool, loan, proposal_id, contributor)
+    verify_state("Compensation", {
+        "event recipient": event["args"]["contributor"].lower() == contributor.address.lower(),
+        "paid amount": paid == min(before["owed"], before["reserve"]),
+        "remaining claim": after["owed"] == before["owed"] - paid,
+        "locked principal": after["locked"] == before["locked"] - paid,
+        "total contribution": after["contributed"] == before["contributed"] - paid,
+        "disposable unchanged": after["disposable"] == before["disposable"],
+        "pool disposable unchanged": after["pool_disposable"] == before["pool_disposable"],
+        "reserve": after["reserve"] == before["reserve"] - paid,
+        "pool ETH": after["cash"] == before["cash"] - paid,
+        "irreversible default": after["status"] == 3 and after["failed"],
+        "resolved loan": after["resolved"],
+        "failure counted once": after["failed_count"] == before["failed_count"] + (not before["failed"]),
+        "collateral adjusted once": after["collateral"] == (before["collateral"] if before["failed"] else min(100, before["collateral"] + 5)),
+        "active loan count": after["active"] == before["active"] - (not before["resolved"]),
+    })
+    print(f"Compensation paid to the contributor wallet: {paid} wei")
+    print(f"Uncovered principal still claimable after future refills: {after['owed']} wei")
+    return paid
+
+
 def print_balances(w3, pool, accounts):
     print("\n--- Balances and protocol state ---")
     for name, account in accounts.items():
         wallet = w3.from_wei(w3.eth.get_balance(account.address), "ether")
         print(f"{name}: {wallet} ETH")
         if name == "Contributor":
-            for label, function in (("Disposable", pool.functions.unlockedBalanceOf),
+            for label, function in (("Total contribution", pool.functions.totalContributed),
+                                    ("Disposable", pool.functions.unlockedBalanceOf),
                                     ("Locked", pool.functions.lockedContributions),
                                     ("Unclaimed gain", pool.functions.pendingInterestGain)):
                 print(f"  {label}: {w3.from_wei(function(account.address).call(), 'ether')} ETH")
     print(f"Pool ETH balance: {w3.from_wei(w3.eth.get_balance(pool.address), 'ether')}")
+    print(f"Oracle ETH balance: {w3.from_wei(w3.eth.get_balance(pool.functions.bitcoinOracle().call()), 'ether')}")
     print(f"Disposable: {pool.functions.totalUnlockedFunds().call()} wei")
     print(f"Compensation: {pool.functions.compensationPoolBalance().call()} wei")
-    print(f"Collateral: {pool.functions.collateralPercentage().call()}%; active loans: {pool.functions.activeLoanCount().call()}")
+    print(f"Collateral: {pool.functions.collateralPercentage().call()}%; active loans: {pool.functions.activeLoanCount().call()}; failed loans: {pool.functions.failedLoanCount().call()}")
 
 
 def main():
@@ -141,48 +240,52 @@ def main():
         send_tx_with_value(w3, contributor, pool.functions.contribute(), deposit)
     print_balances(w3, pool, accounts)
 
-    print("3. Creating a loan proposal...")
-    receipt = send_tx(w3, borrower, pool.functions.createLoanProposal(
-        borrower.address, args.btc_address, principal, 5, 3600, 12,
-    ))
-    proposed = single_event(pool.events.LoanProposed(), receipt)
-    proposal_id = proposed["args"]["proposalId"]
-    resolution_block = proposed["args"]["votingDeadlineBlock"]
-    print(f"Proposal {proposal_id}; earliest resolution block {resolution_block}")
-    print_balances(w3, pool, accounts)
-
-    wait_until(lambda: pool.functions.hasVoted(proposal_id, contributor.address).call(),
-               args.timeout, "the configured contributor's vote")
-    if not pool.functions.voteSupport(proposal_id, contributor.address).call():
-        raise RuntimeError("The configured contributor recorded NO instead of the required YES")
-    print("4. The actual configured contributor has voted YES.")
-    print_balances(w3, pool, accounts)
-    wait_until(lambda: w3.eth.block_number >= resolution_block, args.timeout, "12 voting blocks")
-    receipt = send_tx(w3, borrower, pool.functions.executeApprovedLoan(proposal_id))
-    approved = pool.events.LoanApproved().process_receipt(receipt, errors=DISCARD)
-    if not approved:
-        rejected = pool.events.LoanRejected().process_receipt(receipt, errors=DISCARD)
-        reason = rejected[0]["args"]["reason"] if rejected else "no approval event"
-        raise RuntimeError(f"Proposal closed without a loan: {reason}")
-    loan = get_contract(w3, "LoanContract", approved[0]["args"]["loanContract"])
-    print(f"5. Loan created at {loan.address}; actual principal={loan.functions.principal().call()} wei")
-    print_balances(w3, pool, accounts)
+    print("3. Scenario A: creating and funding a loan to repay on time...")
+    proposal_id, loan = create_demo_loan(
+        w3, pool, accounts, args.btc_address, principal,
+        rate=5, duration=3600, timeout=args.timeout,
+    )
 
     due = loan.functions.dueAmount().call()
     installment = due // 2
     if installment:
         send_tx_with_value(w3, borrower, loan.functions.repay(), installment)
-        print(f"6. First installment: {installment} wei")
+        print(f"4. First installment: {installment} wei")
         print_balances(w3, pool, accounts)
+        print_loan_state(w3, pool, loan, proposal_id, contributor)
     send_tx_with_value(w3, borrower, loan.functions.repay(), due - installment)
-    print(f"7. Final installment; loan status={loan.functions.status().call()}")
+    verify_state("Successful repayment", {"loan closed as Repaid": loan.functions.status().call() == 2})
+    print("5. Final installment; the first loan is Repaid.")
     print_balances(w3, pool, accounts)
+    print_loan_state(w3, pool, loan, proposal_id, contributor)
 
     gain = pool.functions.pendingInterestGain(contributor.address).call()
     if gain:
         send_tx(w3, contributor, pool.functions.claimInterestGain())
-        print("8. Contributor claimed the accrued interest.")
+        print("6. Contributor claimed the accrued interest.")
         print_balances(w3, pool, accounts)
+
+    print("7. Scenario B: creating a second loan that will not be repaid...")
+    failed_id, failed_loan = create_demo_loan(
+        w3, pool, accounts, args.btc_address, max(1, principal // 2),
+        rate=10, duration=3, timeout=args.timeout,
+    )
+    print("8. Waiting for real chain blocks until the second loan is overdue...")
+    wait_for_expiry(w3, failed_loan, args.timeout)
+    print("The deadline has passed. Storage changes only when a transaction records the default.")
+    print_balances(w3, pool, accounts)
+    print_loan_state(w3, pool, failed_loan, failed_id, contributor)
+
+    print("9. Requesting compensation; this transaction also records the default...")
+    claim_demo_compensation(w3, pool, failed_loan, failed_id, contributor)
+    print_balances(w3, pool, accounts)
+    print_loan_state(w3, pool, failed_loan, failed_id, contributor)
+    if pool.functions.loanContributions(failed_id, contributor.address).call() > 0:
+        print("10. Retrying compensation: an empty reserve pays zero and preserves the remaining claim.")
+        claim_demo_compensation(w3, pool, failed_loan, failed_id, contributor)
+        print_balances(w3, pool, accounts)
+        print_loan_state(w3, pool, failed_loan, failed_id, contributor)
+    print("The failed loan stays Defaulted. Remaining locked capital is a loss claim, not disposable ETH.")
     print("Demonstration complete.")
 
 

@@ -114,9 +114,31 @@ Select an address with sufficient capacity from the validated data summary:
     ./.venv/bin/python python/simulate.py --btc-address YOUR_VALIDATED_ADDRESS --principal 1
 
 BTC_ADDRESS can alternatively be set in the demo environment. The demo waits for
-a fresh oracle event, checks actual liquidity, proposes, waits for the configured
-contributor's YES, resolves, repays in two installments and claims gains. All
-receipt statuses are checked and balances/state are printed along the way.
+a fresh oracle event, checks actual liquidity and contributes enough capital.
+It then runs two scenarios, each with a real YES vote and at least 12 voting blocks:
+
+1. **Successful loan:** the requested principal, at 5% interest, is repaid in two
+   installments and the contributor claims the accrued gain.
+2. **Failed loan:** half that principal (rounded down, minimum 1 wei), at 10%, is
+   left unpaid beyond its three-block term. A compensation request records default
+   and pays only what the reserve can cover. A second request demonstrates that an
+   empty reserve pays zero without erasing the remaining claim or counting failure twice.
+
+With `--principal 1` on a fresh deployment, the contributor deposits 50 ETH.
+The first loan generates 0.025 ETH in gain and 0.025 ETH in reserve. The second
+loan disburses 0.5 ETH; compensation pays 0.025 ETH to the contributor's wallet.
+The final pool position is **49.975 ETH total = 49.5 ETH disposable + 0.475 ETH
+locked**. The remaining locked amount is an unpaid principal claim, not cash that
+can be withdrawn. The reserve is empty, active loans are zero, failed loans are
+one and global collateral returns from 45% to 50%. Existing positions, votes or
+reserves can change these numbers when reusing a deployment.
+
+All receipt statuses are checked. Compensation checks include payout, reserve,
+principal claim, contributor/pool accounting and one-time failure adjustments.
+Balances, collateral, current/due blocks and loan states are printed along the
+way. Passing the deadline alone does not execute a transaction: default is recorded
+by the subsequent request. With 10-second Clique blocks, allow several minutes for
+both voting periods; `--timeout` applies separately to each asynchronous step.
 
 Services resume scanning from deployment/the saved cursor. Event insertion and
 cursor advancement are atomic. Pending requests survive restarts and failures;
@@ -195,13 +217,15 @@ within the block gas limit is outside this didactic design.
 | contracts/test/ | V2 upgrade example, unsafe pool, attacker and native Solidity tests; not deployed by setup. |
 | test/ | TypeScript tests, deployment helpers and gas profiling. |
 | python/setup.py | Creates accounts, funds them and deploys the service on Geth. |
-| python/simulate.py | Runs the example loan workflow and prints balances/state. |
+| python/simulate.py | Demonstrates repayment, default, partial compensation and an empty-reserve retry. |
 | python/oracle/ | Bitcoin block parser, offline data checker and running oracle service. |
 | python/voter/auto_voter.py | Always-YES contributor strategy required by the trace. |
 | python/durable_events.py | Shared event scanning, retry and transaction handling for both services. |
-| python/tests/ | Offline tests for Bitcoin data and service reliability. |
+| python/tests/ | Offline tests for Bitcoin data, service reliability and demo invariants. |
 | private-chain/ | Course genesis, supplied account and local Geth installation/data. |
 | docs/report.tex, docs/report.pdf | Source and final report for submission. |
+| docs/guida-orale.tex, docs/guida-orale.pdf | Original Italian study guide: architecture, accounting, demo and oral-exam questions. |
+| docs/default-demo-verification.json | New isolated Geth verification of both demo scenarios, with source hashes and final accounting. |
 | docs/gas-measurements.json, docs/gas-table.tex | Measured gas costs and the generated report table. |
 
 setup.sh installs the development tools; python/setup.py deploys the application.
@@ -220,11 +244,25 @@ To regenerate the report after profiling:
     cd docs
     latexmk -pdf -interaction=nonstopmode -halt-on-error report.tex
 
+The separate Italian oral-exam guide is a study aid, not part of the report's
+page limit. It explains this implementation (not the colleague's project), with
+plain-language explanations, worked examples, numbered excerpts loaded directly
+from the real source files, and questions/model answers for a code-reading oral exam.
+The LaTeX source includes excerpts by line range; recheck those ranges if code moves.
+To regenerate it, run `latexmk -pdf -interaction=nonstopmode -halt-on-error guida-orale.tex`
+from docs/. The submission report remains five pages.
+
 The Geth demo recorded in docs/geth-demo.json verifies the 11 October 2026 sources
 and Bitcoin data; its source hashes identify that specific run.
 It used the course genesis, 15 successful receipts and 20 final state checks.
 docs/bitcoin-validation.json records the corresponding full Bitcoin replay.
 These files preserve historical evidence; they do not certify later code changes.
+The new two-scenario integration is recorded separately in
+docs/default-demo-verification.json: Geth 1.13.14 on an isolated course-genesis
+chain, a real 131,000-block Bitcoin replay, 20 successful transaction receipts
+and 16 final-state checks. It confirms repayment, default, partial compensation
+and a zero-reserve retry for the selected source hashes. The existing local chain
+and service environments were not modified by that verification.
 Before submission, prepare the course ZIP with source, tests, configuration,
 lockfile, scripts and the report
 (maximum five pages). Omit node_modules, .venv, .env, event databases and regenerable

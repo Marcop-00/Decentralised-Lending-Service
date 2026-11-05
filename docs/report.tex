@@ -232,7 +232,7 @@ interpretations of the trace's less explicit wording.
 {\fontsize{8.5}{11}\selectfont Contract tests passed\\4 Solidity + 28 TypeScript}
 \end{statbox}\end{minipage}\hfill
 \begin{minipage}[t]{0.323\linewidth}\begin{statbox}
-{\fontsize{22}{23}\selectfont\bfseries\color{Teal}43}\par
+{\fontsize{22}{23}\selectfont\bfseries\color{Teal}49}\par
 {\fontsize{8.5}{11}\selectfont Offline Python tests passed\\No real keys or RPC}
 \end{statbox}\end{minipage}\hfill
 \begin{minipage}[t]{0.323\linewidth}\begin{statbox}
@@ -340,18 +340,19 @@ previously created loan contracts remain immutable.
 \end{itemize}
 
 \begin{notebox}\small
-\textbf{Historical integration evidence / 11 October 2026.} The seven-file dataset
-contains 162,844 connected blocks; replay of the first 131,000 produced
-299,208 UTXOs and 153,986 address entries. The Geth 1.13.14 run with the course
-genesis and 10-second Clique blocks recorded 15 successful receipts and 20 final
-checks. A 1 ETH loan at 5\% was repaid in two 0.525 ETH installments; gain and
-compensation each received 0.025 ETH. Evidence and original source hashes are in
-\entity{docs/bitcoin-validation.json} and \entity{docs/geth-demo.json}; they identify
-that historical version rather than certifying later changes.
+\textbf{Integration verification / 5 November 2026.} An isolated Geth 1.13.14 chain
+used the course genesis, 10-second Clique blocks and a real 131,000-block Bitcoin
+replay. All 20 receipts succeeded; 16 final checks passed. A 1 ETH loan at 5\%
+was repaid in two 0.525 ETH installments, producing 0.025 ETH each in gain and
+reserve. A second 0.5 ETH loan defaulted: compensation paid 0.025 ETH, then zero
+on retry, preserving the remaining 0.475 ETH claim. Selected source hashes and
+final state are in \entity{docs/default-demo-verification.json}. Earlier evidence
+in \entity{docs/bitcoin-validation.json} and \entity{docs/geth-demo.json} remains
+explicitly historical; the user's existing chain and environments were untouched.
 \end{notebox}
 
 \newpage
-\pagetitle{05 / USER MANUAL}{Run the project}{From installation to a complete loan on the course's private chain.}
+\pagetitle{05 / USER MANUAL}{Run the project}{Successful repayment, then default and compensation on the private chain.}
 
 \subhead{1. Install and validate Bitcoin input}
 Use a supported even-numbered Node release (22.13.0+), Python 3.10+ and Geth
@@ -395,15 +396,18 @@ index \textbf{in memory}, one block at a time, over the required first 131,000
 blocks. No Bitcoin cache is stored on disk. Keep each service's SQLite event
 database when restarting after an RPC failure.
 
-\subhead{5. Run the loan example / project root}
+\subhead{5. Run both loan scenarios / project root}
 \begin{codeblock}
 ./.venv/bin/python python/simulate.py \
   --btc-address YOUR_VALIDATED_ADDRESS --principal 1
 \end{codeblock}
-Choose an address from the validated summary. The demo waits for a fresh balance,
-checks liquidity, contributes, proposes, observes the configured YES vote,
-resolves, repays in two installments and claims gain. It checks receipt status
-and prints account balances and relevant protocol state after meaningful changes.
+Choose an address from the validated summary. The demo checks a fresh oracle
+balance and contributes. Scenario A funds 1 ETH at 5\%, repays two 0.525 ETH
+installments and claims gain. Scenario B funds 0.5 ETH, waits beyond its three-block
+term and requests compensation, recording default. On a fresh deployment the
+reserve pays 0.025 ETH; a zero-reserve retry preserves the remaining 0.475 ETH
+claim. Receipts and compensation invariants are checked; balances, deadlines and
+loan states are printed. Both proposals wait for real YES votes and 12 blocks.
 
 {\small\color{Muted}\textbf{Submission.} Include source, tests, configuration,
 lockfile, scripts and report in one ZIP. Exclude dependencies, \entity{.env},

@@ -1,0 +1,963 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[italian]{babel}
+\usepackage[default]{sourcesanspro}
+\usepackage{inconsolata}
+\usepackage{amsmath,microtype,booktabs,tabularx,array,enumitem}
+\usepackage[table]{xcolor}
+\usepackage{geometry,fancyhdr,lastpage,tcolorbox,listings,hyperref}
+\tcbuselibrary{skins}
+\geometry{left=19mm,right=19mm,top=17mm,bottom=16mm,
+  headheight=21pt,headsep=5mm,footskip=9mm,includeheadfoot}
+\definecolor{Navy}{HTML}{16334A}
+\definecolor{Teal}{HTML}{147D83}
+\definecolor{Ink}{HTML}{253947}
+\definecolor{Muted}{HTML}{60717D}
+\definecolor{Mist}{HTML}{EEF4F7}
+\definecolor{Rule}{HTML}{D5E1E7}
+\definecolor{Warm}{HTML}{A35E28}
+\definecolor{Sand}{HTML}{FAF3E9}
+\color{Ink}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\setlength{\emergencystretch}{2em}
+\linespread{1.08}
+\setlist[itemize]{leftmargin=5mm,itemsep=3pt,topsep=4pt,parsep=0pt}
+\setlist[enumerate]{leftmargin=6mm,itemsep=3pt,topsep=4pt,parsep=0pt}
+\renewcommand{\arraystretch}{1.18}
+\setlength{\tabcolsep}{5pt}
+\hypersetup{colorlinks=true,linkcolor=Teal,urlcolor=Teal,
+  pdftitle={Decentralised Lending Service - Capire e spiegare il codice},
+  pdfauthor={Marco Pernisco},pdfsubject={Guida individuale per l'esame orale}}
+\pagestyle{fancy}\fancyhf{}
+\fancyhead[L]{\fontsize{8}{10}\selectfont\color{Muted}DECENTRALISED LENDING SERVICE}
+\fancyhead[R]{\fontsize{8}{10}\selectfont\color{Muted}CAPIRE E SPIEGARE IL CODICE}
+\fancyfoot[L]{\fontsize{8}{10}\selectfont\color{Muted}Marco Pernisco / 683674}
+\fancyfoot[R]{\fontsize{8}{10}\selectfont\color{Muted}\thepage\ /\ \pageref*{LastPage}}
+\renewcommand{\headrulewidth}{0.3pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{Rule}\leaders\hrule height \headrulewidth\hfill}}
+\newcommand{\code}[1]{\textcolor{Navy}{\texttt{\small #1}}}
+\newcommand{\lead}[1]{\par\vspace{2mm}{\large\bfseries\color{Navy}#1\par}\vspace{0.5mm}}
+\newcounter{guidechapter}
+\newcommand{\chapterpage}[3]{\clearpage
+  \stepcounter{guidechapter}\pdfbookmark[0]{#2}{chapter\theguidechapter}
+  {\small\bfseries\color{Teal}#1\par}\vspace{1mm}
+  {\fontsize{24}{28}\selectfont\bfseries\color{Navy}#2\par}\vspace{2mm}
+  {\color{Muted}#3\par}\vspace{3mm}}
+\tcbset{panel/.style={enhanced,sharp corners,boxrule=0.4pt,colframe=Rule,
+  colback=Mist,left=3mm,right=3mm,top=2mm,bottom=2mm,before skip=5pt,after skip=5pt}}
+\newtcolorbox{keybox}[1]{panel,borderline west={1.5pt}{0pt}{Teal},
+  title={#1},fonttitle=\bfseries,fontupper=\raggedright,coltitle=Navy,colbacktitle=Mist,titlerule=0pt}
+\newtcolorbox{warningbox}[1]{panel,colback=Sand,colbacktitle=Sand,
+  borderline west={1.5pt}{0pt}{Warm},title={#1},fonttitle=\bfseries,fontupper=\raggedright,coltitle=Warm,titlerule=0pt}
+\newcommand{\oral}[2]{\begin{keybox}{Il professore potrebbe chiedere: #1}#2\end{keybox}}
+\lstdefinelanguage{Solidity}{morekeywords={address,bool,bytes,calldata,constant,
+  constructor,contract,else,emit,error,event,external,false,for,function,if,
+  immutable,import,interface,internal,is,library,mapping,memory,modifier,new,
+  onlyOwner,override,payable,private,public,pure,receive,return,returns,revert,
+  storage,string,struct,true,uint160,uint256,view,virtual},sensitive=true,
+  morecomment=[l]{//},morestring=[b]"}
+\lstset{basicstyle=\ttfamily\fontsize{8.5}{10.5}\selectfont,
+  keywordstyle=\color{Teal}\bfseries,commentstyle=\color{Muted},
+  stringstyle=\color{Warm},numbers=left,numberstyle=\tiny\color{Muted},
+  numbersep=7pt,xleftmargin=8mm,framexleftmargin=6mm,
+  backgroundcolor=\color{Mist},frame=single,rulecolor=\color{Rule},
+  framerule=0.3pt,framesep=2mm,columns=fullflexible,keepspaces=true,
+  breaklines=true,breakatwhitespace=false,showstringspaces=false,
+  aboveskip=4pt,belowskip=6pt,tabsize=4}
+\newcommand{\sourcecode}[4]{\par
+  {\footnotesize\color{Muted}\path{#1}\quad /\quad righe #2--#3\par}
+  \lstinputlisting[language=#4,firstline=#2,lastline=#3,firstnumber=#2]{../#1}}
+\newcommand{\qa}[2]{\par\vspace{1mm}\textbf{\textcolor{Navy}{#1}}\par #2\par}
+
+\begin{document}
+\pdfbookmark[0]{Come usare la guida}{inizio}
+{\small\bfseries\color{Teal}GUIDA INDIVIDUALE / PREPARAZIONE ALL'ORALE}\par
+\vspace{5mm}
+{\fontsize{31}{35}\selectfont\bfseries\color{Navy}Il progetto,\\spiegato con il codice\par}
+\vspace{4mm}
+{\Large Una lettura guidata per capire che cosa succede,\par
+perché succede e come raccontarlo al professore.\par}
+\vspace{3mm}
+Marco Pernisco\quad\textcolor{Muted}{683674 / P2P Systems and Blockchains Lab}
+
+\lead{Da dove partiamo}
+Immagina una cassa comune. Alcune persone vi depositano ETH; un'altra persona
+chiede un prestito. Chi ha messo i fondi vota se concederlo. Se il prestito viene
+approvato, il denaro esce dalla cassa e arriva al richiedente. Quando rientra,
+una parte restituisce il capitale e un'altra paga gli interessi.
+
+Il nostro progetto traduce questa storia in contratti Solidity e programmi
+Python. La parte difficile non è ricordare i nomi: è capire come ogni istruzione
+cambia i soldi disponibili, i crediti e lo stato di un prestito.
+
+\begin{keybox}{Come studiare ogni estratto}
+Leggi prima la situazione descritta. Poi guarda il codice e chiediti:
+\textbf{chi lo chiama, che cosa controlla, quali dati cambia e a chi invia ETH?}
+Infine prova a rispondere alla domanda nel riquadro senza leggere la soluzione.
+La risposta deve spiegare il motivo del codice, non tradurre soltanto le parole.
+\end{keybox}
+
+\lead{Tre percorsi di lettura}
+\begin{tabularx}{\linewidth}{@{}>{\bfseries}p{24mm}X@{}}
+\toprule
+Il prestito & Persone e saldi; depositi; voto; erogazione; rate; default e compensazione.\\
+I programmi & Oracle Bitcoin, saldi UTXO, attesa iniziale, voter e gestione degli eventi.\\
+La discussione & Setup, proxy, sicurezza, test, gas, strategia economica e demo.\\
+\bottomrule
+\end{tabularx}
+
+\begin{warningbox}{Codice vero, non pseudocodice}
+Gli estratti sono letti direttamente dai file del progetto durante la compilazione
+del PDF. I numeri a sinistra sono le righe dei sorgenti. Mostriamo porzioni di
+funzioni: il contesto e gli altri controlli sono spiegati nel testo. Se i file
+cambiano, i riferimenti vanno ricontrollati. La guida è separata dal report di
+consegna e non modifica le regole dei contratti.
+\end{warningbox}
+
+\chapterpage{01 / LA STORIA COMPLETA}{Chi mette i fondi e chi li riceve}{Prima distinguiamo le persone dai programmi che usano.}
+Chiamiamo \textbf{Alice} la persona che deposita nel pool e \textbf{Bob} quella
+che chiede il prestito. Questi nomi servono solo agli esempi; il codice identifica
+le persone con indirizzi Ethereum.
+
+Alice è un \emph{contributor}: mette ETH a disposizione, vota e può ritirare la
+parte non impegnata in prestiti. Bob è l'\emph{applicant}, cioè il richiedente;
+quando riceve il prestito lo chiamiamo anche \emph{borrower}. Una stessa persona
+può ricoprire entrambi i ruoli. Esistono poi l'owner, che amministra il pool,
+e l'operatore oracle, che pubblica il dato Bitcoin.
+
+\lead{La sequenza, raccontata senza formule}
+Bob indica un indirizzo Bitcoin e paga una richiesta di aggiornamento. Un
+programma Python ricostruisce quanto quell'indirizzo possiede nello snapshot
+storico richiesto e scrive il risultato su Ethereum. Bob propone il prestito;
+Alice vota. Passati i blocchi previsti, Bob chiede al pool di risolvere la proposta.
+
+Se voto, disponibilità ETH e controllo BTC permettono il prestito, il pool crea
+un contratto dedicato e gli passa il capitale. Il contratto lo invia a Bob.
+Bob paga le rate a quel contratto, che comunica al pool come dividerle. Se Bob
+non paga in tempo, il prestito può essere dichiarato fallito. Alice può chiedere
+una compensazione, ma solo nei limiti della riserva realmente esistente.
+
+\lead{Dove cercare i vari passaggi}
+\begin{tabularx}{\linewidth}{@{}p{46mm}X@{}}
+\toprule File & In parole semplici\\\midrule
+\code{FundingPool.sol} & La cassa comune e i suoi registri: depositi, voti e riparti.\\
+\code{LoanContract.sol} & La scheda di un singolo prestito, con termini e scadenza.\\
+\code{BitcoinOracle.sol} & Il registro Ethereum dei saldi BTC comunicati dall'operatore.\\
+\code{FundingPoolProxy.sol} & L'indirizzo stabile del pool, anche quando cambia la logica.\\
+\code{oracle\_service.py} & Legge Bitcoin e risponde alle richieste di saldo.\\
+\code{auto\_voter.py} & Vota sempre YES con l'account configurato.\\
+\code{simulate.py} & Fa compiere agli account la sequenza della dimostrazione.\\
+\bottomrule
+\end{tabularx}
+
+\oral{perché non fa tutto un unico contratto?}{Il pool gestisce i fondi comuni;
+ogni contratto di prestito gestisce una singola operazione. Il dato Bitcoin
+richiede invece un servizio esterno, perché il contratto Ethereum non apre da
+solo i file Bitcoin del computer. Separare questi compiti rende più chiaro chi
+può modificare ciascun dato.}
+
+\chapterpage{02 / LEGGERE SOLIDITY}{Le parole che trovi nel codice}{Pochi concetti di sintassi per non bloccarti davanti a una funzione.}
+\sourcecode{contracts/FundingPool.sol}{70}{75}{Solidity}
+Un \code{mapping} è un registro indicizzato da una chiave. Nella riga 70 la
+chiave è un indirizzo: per ogni persona salvo un importo. Nella riga 74 ci sono
+due chiavi: prima l'identificativo della proposta, poi l'indirizzo del votante.
+Così posso chiedere: ``Alice ha già votato sulla proposta numero 2?''.
+
+\code{address} rappresenta un indirizzo Ethereum; \code{uint256} è un intero
+senza segno; \code{bool} vale vero o falso. Gli importi ETH sono interi in
+\textbf{wei}: 1 ETH corrisponde a $10^{18}$ wei. Il contratto non usa numeri con
+la virgola per i pagamenti.
+
+\sourcecode{contracts/FundingPool.sol}{141}{148}{Solidity}
+Qui \code{external} permette di chiamare la funzione dall'esterno.
+\code{payable} permette di accompagnare la chiamata con ETH.
+\code{msg.sender} è chi sta chiamando il contratto, mentre \code{msg.value} è
+quanto ETH accompagna questa chiamata, espresso in wei.
+
+\code{notTerminated} è un \emph{modifier}: esegue un controllo aggiuntivo prima
+del corpo della funzione. \code{revert} interrompe l'operazione e annulla gli
+effetti della transazione; il gas già consumato non viene magicamente azzerato.
+\code{emit} produce un evento nei log: è una notifica che Python può leggere,
+non una chiamata diretta al programma Python. Nel corpo di un modifier,
+\code{\_} segna il punto in cui viene eseguita la funzione protetta.
+
+\lead{Altre parole che incontreremo}
+\code{storage} indica dati persistenti del contratto: un riferimento storage
+permette di modificarli direttamente. \code{memory} indica dati temporanei della
+chiamata. \code{view} indica che la funzione non modifica lo stato; \code{pure}
+che non legge né modifica lo stato del contratto. \code{immutable} fissa un dato
+alla costruzione del contratto. \code{internal} serve alla logica interna o
+ereditata, non è un normale ingresso pubblico per l'utente.
+
+\oral{public significa che tutti possono modificare il saldo?}{No.
+Per questo mapping il compilatore genera una funzione di lettura. Le modifiche
+devono passare per il codice delle funzioni che le permettono. Visibilità del
+dato e autorizzazione a cambiarlo sono due cose diverse.}
+
+\chapterpage{03 / I TRE SALDI}{Depositato non vuol dire disponibile}{Il punto più importante della contabilità del progetto.}
+Alice deposita 10 ETH. Finché non presta nulla, può ritirare 10. Se 4 vengono
+erogati a Bob, Alice ha ancora una posizione complessiva di 10, ma può ritirarne
+solo 6: gli altri 4 sono impegnati nel prestito.
+
+\sourcecode{contracts/FundingPool.sol}{172}{174}{Solidity}
+La funzione legge il totale registrato per Alice e sottrae il capitale bloccato.
+Non interroga il saldo del wallet di Alice e non trasferisce ETH. Calcola la
+parte della sua posizione che il pool può ancora utilizzare o restituirle.
+
+\begin{tabularx}{\linewidth}{@{}Xrrr@{}}
+\toprule Situazione (ETH) & Totale & Bloccato & Disponibile\\\midrule
+Alice deposita & 10 & 0 & 10\\
+Bob riceve un prestito di 4 & 10 & 4 & 6\\
+Bob restituisce 2 di capitale & 10 & 2 & 8\\
+Bob restituisce gli ultimi 2 & 10 & 0 & 10\\\bottomrule
+\end{tabularx}
+
+\lead{Perché il totale non sale quando Bob rimborsa?}
+Perché quei 4 ETH erano già parte della posizione di Alice. Il rimborso cambia
+la loro condizione: da impegnati tornano disponibili. Se aggiungessi anche 4 al
+totale, dopo il rimborso Alice risulterebbe creditrice di 14 ETH pur avendone
+depositati 10, senza nemmeno contare gli interessi. Sarebbe un doppio conteggio.
+
+Nel pool esistono anche due somme separate: il \textbf{gain}, cioè gli interessi
+da incassare, e la \textbf{riserva di compensazione}, usata per le perdite.
+Nessuna delle due aumenta automaticamente il capitale disponibile per nuovi
+prestiti. Il saldo ETH del contratto e il capitale totale registrato per le
+persone, quindi, non sono la stessa misura.
+
+\begin{keybox}{Una regola da ricordare con un esempio, non solo come formula}
+Totale = disponibile + bloccato. Nel nostro esempio: $10=6+4$.
+Nei normali flussi, gli ETH effettivamente nel pool coprono capitale disponibile,
+riserva e gain non incassati. Il capitale bloccato è già stato erogato: non è
+ancora denaro liquido dentro il contratto.
+\end{keybox}
+
+\oral{perché non posso ritirare anche il bloccato?}{Perché il pool lo ha già
+prestato. La variabile rappresenta quanto resta da recuperare, non ETH ancora
+disponibili in cassa. Per ritirarlo deve prima rientrare il capitale, oppure
+deve avvenire un recupero secondo le regole della compensazione.}
+
+\chapterpage{04 / DEPOSITI E PRELIEVI}{Come entrano ed escono gli ETH}{Seguire l'ordine: controlli, aggiornamenti e trasferimento.}
+\sourcecode{contracts/FundingPool.sol}{141}{148}{Solidity}
+Il deposito usa l'importo della chiamata, non un parametro dichiarato a parole.
+La riga 142 rifiuta un importo minore o \emph{uguale} al minimo: servono
+\textbf{più di 100.000 wei}. Poi aggiorna il totale della persona e la disponibilità
+del pool. La registrazione aggiunge la persona all'elenco dei contributor solo
+se non c'è già; l'evento permette ai client di osservare il deposito.
+
+\sourcecode{contracts/FundingPool.sol}{153}{166}{Solidity}
+Il prelievo prima verifica che l'importo sia positivo e non superi il disponibile.
+Poi riduce i registri, e soltanto dopo invia gli ETH. Con 10 totali e 4 bloccati,
+Alice può prelevare al massimo 6. Se preleva 2, rimangono 8 totali, 4 bloccati e
+4 disponibili.
+
+Nella riga 163 \code{payable(msg.sender)} indica il destinatario; la
+\code{call} invia \code{amount} wei. Il booleano \code{sent} dice se la chiamata
+è riuscita. Se fallisce, il \code{revert} annulla anche le modifiche ai registri:
+Alice non perde il credito senza ricevere il denaro.
+
+\oral{perché aggiorni i saldi prima della call?}{Perché il destinatario potrebbe
+essere un contratto ed eseguire altro codice appena riceve ETH. Aggiornando
+prima, una chiamata ricorsiva non vede più lo stesso saldo disponibile da
+prelevare. È la difesa principale mostrata nel nostro test di reentrancy.}
+
+\chapterpage{05 / CREARE E VOTARE}{La proposta non è ancora il prestito}{Salvare i termini e registrare una scelta sono operazioni diverse dall'erogazione.}
+Bob deve chiedere un prestito a proprio nome, indicare un indirizzo BTC non
+vuoto, un capitale positivo, un tasso tra 1 e 100 e una durata positiva.
+Nel codice il parametro del voto deve essere \textbf{esattamente 12}: la
+risoluzione è possibile dopo che sono trascorsi quei 12 blocchi.
+
+\sourcecode{contracts/FundingPool.sol}{460}{474}{Solidity}
+La riga 467 assegna un nuovo numero alla proposta. La riga 468 prende un
+riferimento \code{storage}: le assegnazioni successive modificano la proposta
+salvata nel contratto, non una copia temporanea. La scadenza del voto è espressa
+come altezza di blocco, non come data o secondi dell'orologio.
+
+\sourcecode{contracts/FundingPool.sol}{490}{502}{Solidity}
+Si rifiutano proposte inesistenti, già risolte e voti duplicati. Il controllo
+alla riga 498 usa il \emph{totale}, quindi un contributor con tutto il capitale
+bloccato può votare. Il suo peso corrente può però essere zero. La coppia di
+mapping salva separatamente ``ha votato'' e ``ha scelto YES o NO''.
+
+\oral{perché servono due mapping e non basta voteSupport?}{Un booleano non
+impostato vale già false. Senza \code{hasVoted} non distinguerei chi ha scelto
+NO da chi non ha ancora votato, né potrei impedire correttamente un secondo
+voto. Per decidere l'esito entrambi pesano NO, ma sono situazioni diverse.}
+
+\chapterpage{06 / DECIDERE L'ESITO}{Il voto viene ripesato alla fine}{La scelta resta la stessa, ma il capitale disponibile può cambiare.}
+Immagina Alice con 6 ETH disponibili e Carlo con 4. Alice vota YES e Carlo
+non vota: in quel momento Alice avrebbe la maggioranza. Prima della risoluzione,
+però, Alice ritira 4 ETH. Le disponibilità diventano 2 e 4: il suo YES non ha
+più la maggioranza. Il codice deve guardare la situazione corrente.
+
+\sourcecode{contracts/FundingPool.sol}{524}{538}{Solidity}
+Il ciclo somma soltanto la disponibilità corrente di chi ha votato YES.
+La riga 533 considera NO tutto il resto: sia i contrari, sia chi non ha votato.
+Il controllo alla riga 535 richiede più di metà del capitale disponibile.
+Una parità non basta. Anche quando la somma è dispari, il confronto intero
+funziona: su 5 wei totali, 3 YES bastano e 2 no.
+
+\lead{Perché non uso solo i pesi registrati al momento del voto?}
+\code{voteOnProposal()} aggiorna anche i conteggi della proposta, ma quei valori
+non sono il risultato definitivo: qui vengono ricalcolati e sovrascritti.
+Nel frattempo possono esserci stati depositi, prelievi e rimborsi di altri
+prestiti. La regola del progetto richiede i saldi disponibili alla risoluzione.
+
+Nel codice, \code{votingDeadlineBlock} indica quando Bob può risolvere:
+dal blocco di creazione più 12 in poi. Non chiude il voto da solo: si può votare
+finché la proposta non viene risolta. Solo Bob può risolverla.
+Una risoluzione anticipata fallisce; il rifiuto economico invece chiude la
+proposta, emette un evento e restituisce l'indirizzo zero.
+
+\oral{a cosa serve executed = true anche quando rifiuti?}{A rendere definitiva
+quella risoluzione. Il nome del campo non significa necessariamente ``denaro
+erogato'': significa proposta già trattata. Senza chiuderla, Bob potrebbe
+provare ripetutamente a farla passare dopo aver cambiato la situazione.}
+
+\chapterpage{07 / TROVARE IL CAPITALE}{Da quali persone arriva il prestito}{Prima verifico la capacità; poi blocco le quote proporzionali.}
+\sourcecode{contracts/FundingPool.sol}{547}{553}{Solidity}
+L'oracle restituisce satoshi. Il pool li converte in wei con il cambio fisso
+di \textbf{30 ETH per BTC}. \code{1 ether} è una costante di unità di Solidity:
+vale $10^{18}$ wei, non una richiesta di inviare un ETH.
+Con 0,04 BTC la capacità è 1,2 ETH: una richiesta di 1 può passare questo controllo,
+una di 2 no. Devono comunque essere sufficienti anche i fondi ETH del pool.
+
+\sourcecode{contracts/FundingPool.sol}{262}{273}{Solidity}
+Queste righe sono dentro il ciclo sui contributor. Se il pool ha 60 ETH
+disponibili, divisi in 10, 20 e 30, per un prestito di 12 le quote sono 2, 4 e 6.
+\code{Math.mulDiv} calcola il prodotto diviso per il totale e, in questa forma,
+arrotonda per difetto. Tutti i contributor disponibili partecipano, non solo
+chi ha votato YES.
+
+La quota aumenta il bloccato della persona e diminuisce la disponibilità comune.
+Vengono salvate due copie con significati diversi: \code{loanContributions}
+è il credito che si ridurrà con i recuperi; \code{initialLoanContributions}
+conserva la quota iniziale per ordine di rimborso e interessi.
+
+\oral{perché sommi totalLocked invece di erogare la richiesta?}{Perché le quote
+intere possono perdere un resto. Con disponibilità 100.001 e 100.002 wei e
+richiesta di 3, ogni quota è 1: erogo 2, non 3. I controlli di capacità vengono
+prima effettuati sulla richiesta; il contratto del prestito usa poi il capitale
+effettivo, che può essere inferiore per arrotondamento.}
+
+\chapterpage{08 / IL CONTRATTO DEL PRESTITO}{Una scheda separata per Bob}{Il pool crea il contratto e gli dà i fondi per l'erogazione.}
+\sourcecode{contracts/FundingPool.sol}{563}{575}{Solidity}
+\code{new LoanContract} distribuisce una nuova istanza su Ethereum.
+Le passo indirizzo del pool, borrower, capitale effettivo, tasso, durata e
+percentuale di collateral corrente. Ogni prestito ha quindi i propri termini.
+Il pool registra l'indirizzo come autorizzato prima di finanziarlo.
+
+\sourcecode{contracts/LoanContract.sol}{91}{98}{Solidity}
+\code{onlyPool} permette il finanziamento solo al pool associato. Il prestito
+deve essere nello stato Created e ricevere esattamente il capitale previsto.
+Passa a Funded e invia gli ETH a Bob. Se l'invio fallisce, la transazione
+si annulla: non resta un finanziamento registrato senza l'erogazione riuscita.
+
+\lead{Qui msg.sender cambia lungo la catena delle chiamate}
+Bob chiama il pool per risolvere: nel pool il chiamante è Bob. Il pool chiama
+\code{fundLoan()}: dentro il prestito il chiamante è il pool, non Bob.
+La variabile \code{borrower} serve a ricordare chi deve ricevere gli ETH e
+chi potrà rimborsare. \code{msg.sender} non indica sempre l'utente iniziale.
+
+Il costruttore fissa \code{dueBlock = block.number + durationBlocks}.
+Fissa anche il collateral del prestito: se nasce al 50\%, continuerà a usare
+il 50\% anche quando il parametro globale del pool cambierà.
+Gli stati principali sono Created, Funded, Repaid e Defaulted: proposta e
+prestito sono due oggetti diversi, con momenti diversi del ciclo di vita.
+
+\oral{perché controlli authorizedLoanContracts?}{Per riconoscere i contratti
+che il pool ha davvero creato. Più avanti il prestito chiamerà funzioni che
+sbloccano fondi e registrano default: non posso permettere che un indirizzo
+qualsiasi si presenti come un prestito e alteri quei conti.}
+
+\chapterpage{09 / CAPIRE UNA RATA}{Che cosa paga davvero Bob}{Prima facciamo i conti in ETH; poi leggiamo il calcolo Solidity.}
+Bob riceve 1 ETH al 5\%. Deve restituire 1 ETH di capitale e 0,05 di interesse,
+per un totale di 1,05. Il tasso è sul prestito intero: non stiamo applicando
+un tasso annuale né un interesse composto.
+
+\sourcecode{contracts/LoanContract.sol}{79}{86}{Solidity}
+\code{dueAmount()} restituisce il debito totale previsto, non il residuo dopo
+le rate già pagate. L'interesse è una divisione intera; il capitale effettivamente
+erogato è il punto di partenza del calcolo.
+
+Se Bob paga due rate da 0,525 ETH e il collateral del prestito è 50\%, ciascuna
+rata contiene 0,5 di capitale e 0,025 di interesse. Metà dell'interesse va alla
+riserva e metà è il gain del contributor. Il collateral \textbf{non} trattiene
+il 50\% del capitale prestato.
+
+\begin{tabularx}{\linewidth}{@{}Xrr@{}}
+\toprule Destinazione & Una rata & Totale due rate\\\midrule
+Capitale restituito & 0,5000 & 1,0000\\
+Riserva & 0,0125 & 0,0250\\
+Gain & 0,0125 & 0,0250\\\midrule
+Pagamento di Bob & 0,5250 & 1,0500\\\bottomrule
+\end{tabularx}
+
+\lead{Quanto della rata accetto come debito?}
+\sourcecode{contracts/LoanContract.sol}{117}{121}{Solidity}
+\code{paidBefore} somma capitale e interessi già contabilizzati.
+\code{debt - paidBefore} è il debito residuo. Se Bob deve ancora 0,525 ma manda
+0,6, accetto 0,525 come rimborso del debito; gli altri 0,075 sono un'eccedenza
+e finiranno nella riserva, non vengono restituiti a Bob.
+
+\oral{perché non metti tutti i soldi della rata nel disponibile?}{Perché solo
+il capitale ricostituisce i fondi prestabili. Gli interessi hanno due destinazioni
+separate: gain dei contributor e riserva. Sommarli al disponibile falserebbe
+la contabilità e permetterebbe di prestare somme già dovute ad altro titolo.}
+
+\chapterpage{10 / IL CALCOLO DELLE RATE}{Perché guardo quanto è stato pagato}{Non riparto da zero a ogni rata: aggiorno un totale progressivo.}
+Il problema è l'arrotondamento: dividere separatamente ogni pagamento può
+produrre risultati diversi a seconda di quante rate Bob sceglie. Per questo
+calcoliamo prima quale dovrebbe essere il totale raggiunto dopo l'ultimo
+pagamento, poi sottraiamo quello che avevamo già registrato.
+
+\sourcecode{contracts/LoanContract.sol}{125}{135}{Solidity}
+Nella riga 125 \code{paidAfter} è quanto Bob ha pagato complessivamente, limitato
+al debito. La proporzione fra capitale e debito ci dice quanto di quel totale
+è capitale. La riga 126 assegna il resto all'interesse. Le righe 127--128
+calcolano solo la parte nuova, che appartiene alla rata attuale.
+
+Con il prestito di 1 ETH, dopo la prima rata abbiamo 0,5 di capitale e 0,025 di
+interesse. Dopo la seconda, i totali diventano 1 e 0,05. La seconda rata
+contabilizza le differenze: $1-0{,}5=0{,}5$ e $0{,}05-0{,}025=0{,}025$.
+Non deve distribuire di nuovo i totali già raggiunti con la prima rata.
+
+\lead{La stessa idea viene usata per il collateral}
+Le righe 130--131 calcolano quanto dovrebbe esserci complessivamente nella
+riserva per gli interessi pagati, e tolgono la parte già conteggiata prima.
+La riga 132 assegna il resto dell'interesse al gain. Solo dopo aggiorniamo
+\code{repaidPrincipal} e \code{repaidInterest}: i vecchi valori sono serviti
+per calcolare le differenze. L'eccedenza viene aggiunta alla quota di riserva.
+
+La formula matematica è $B(C)=\lfloor CP/(P+I)\rfloor$: $C$ è il pagato totale,
+$P$ il capitale e $I$ l'interesse previsto. Non occorre recitarla senza capirla:
+è una proporzione applicata al totale raggiunto. È una scelta implementativa
+documentata per rendere coerenti rate e arrotondamenti.
+
+\oral{e se il professore ti indica principalAfter - repaidPrincipal?}{Direi:
+``Il primo valore è il capitale che risulta rimborsato dopo questa rata; il
+secondo è quello già rimborsato prima. La differenza è il nuovo capitale da
+sbloccare adesso. Se distribuissi principalAfter per intero, conterei due
+volte le rate precedenti.''}
+
+\chapterpage{11 / COLLEGARE I CONTRATTI}{Come il rimborso torna al pool}{Prima arriva il denaro; poi vengono aggiornati i registri comuni.}
+Bob chiama \code{repay()} sul contratto del proprio prestito. Dopo aver
+calcolato capitale, gain e quota di riserva, il prestito deve trasferire gli
+ETH al pool e spiegargli come dividerli. Non basta aggiornare i contatori
+del solo prestito: i saldi dei contributor si trovano nel pool.
+
+\sourcecode{contracts/LoanContract.sol}{137}{145}{Solidity}
+La prima condizione chiude con successo soltanto un prestito ancora Funded
+che abbia ricevuto tutto il capitale e l'interesse. Se era già Defaulted,
+quel controllo non lo trasforma in Repaid: è il motivo concreto per cui
+un pagamento tardivo non cancella il fallimento.
+
+La riga 141 invia al pool tutto il denaro della rata, compresa un'eventuale
+eccedenza. Il \code{receive()} del pool accetta l'invio soltanto da prestiti
+autorizzati. Poi l'interfaccia \code{IFundingPool} permette di chiamare
+\code{handleRepayment()}: non crea un altro pool, descrive come chiamare quello
+all'indirizzo già noto. In questo callback il chiamante è il prestito.
+
+\sourcecode{contracts/FundingPool.sol}{398}{410}{Solidity}
+Il controllo iniziale protegge questi aggiornamenti: un estraneo non può
+chiamarli inventando capitale da sbloccare. Poi il pool usa tre strade:
+restituisce il capitale, accredita il gain e aumenta la riserva.
+I parametri descrivono gli ETH già ricevuti, non inviano tre nuovi pagamenti.
+
+\oral{perché ci sono sia una call con ETH sia handleRepayment?}{La prima sposta
+il denaro dal prestito al pool; la seconda aggiorna la sua contabilità secondo
+la divisione calcolata. Sono due ruoli distinti dentro la stessa transazione.
+Se il callback fallisce, il revert annulla anche il trasferimento precedente
+e gli altri effetti di quella transazione.}
+
+\chapterpage{12 / RESTITUIRE IL CAPITALE}{Chi recupera per primo}{Il capitale segue una priorità; il gain segue una proporzione.}
+Se Alice ha finanziato 6 ETH e Carlo 4, il capitale torna prima ad Alice.
+Quando rientrano 2 ETH di \emph{capitale}, il credito di Alice scende da 6 a 4,
+quello di Carlo resta 4. La priorità è data dalla quota iniziale, non viene
+ricalcolata cambiando ordine dopo ogni rata.
+
+\sourcecode{contracts/FundingPool.sol}{207}{224}{Solidity}
+Il ciclo usa un elenco già ordinato. \code{remaining} è il capitale ancora da
+assegnare; \code{lockedForLoan} è il credito residuo di questa persona su questo
+prestito. Il valore \code{refund} prende il minore dei due. Se restano 3 da
+assegnare e Alice ha credito 1, ad Alice va 1 e il ciclo continua con gli altri 2.
+
+Le righe 214--215 riducono sia il credito su quel prestito sia il bloccato totale
+della persona. La riga 217 aumenta il disponibile del pool. Non aumentiamo
+\code{totalContributed}: il capitale era già contato. Un eventuale capitale
+non più assegnabile, ad esempio perché un credito è già stato compensato,
+finisce nella riserva.
+
+\sourcecode{contracts/ContributorOrder.sol}{30}{33}{Solidity}
+Questa funzione confronta due posizioni: prima viene la quota iniziale maggiore;
+in parità, l'indirizzo numericamente maggiore. \code{uint160} permette il
+confronto numerico degli indirizzi. Il verso decrescente è la scelta documentata
+per rendere deterministico lo spareggio.
+
+\oral{a cosa serve loanOrderPrepared?}{A non rifare l'ordinamento a ogni rata.
+Un merge sort prepara la priorità una volta per prestito; il flag ricorda che
+il lavoro è già fatto. La preparazione ritardata serve anche ai prestiti
+preesistenti che non avevano ancora quel flag impostato.}
+
+\chapterpage{13 / GLI INTERESSI}{Accreditare non è inviare denaro}{Il gain diventa un credito separato, poi Alice lo incassa.}
+Con quote iniziali 6 e 4, Alice ha diritto al 60\% del gain e Carlo al 40\%.
+Se il gain da dividere è 0,025 ETH, riceveranno crediti di 0,015 e 0,010.
+Anche se Alice ha recuperato prima il capitale, la sua quota iniziale rimane
+quella usata per gli interessi.
+
+\sourcecode{contracts/FundingPool.sol}{304}{313}{Solidity}
+Queste righe sono dentro il ciclo sui finanziatori. Ogni quota viene aggiunta
+a \code{pendingInterestGain}: è un aggiornamento del registro, non un bonifico.
+\code{disbursed} somma ciò che è stato accreditato, nonostante il nome possa
+far pensare a denaro già inviato. Le divisioni intere possono lasciare qualche
+wei: il resto viene aggiunto alla riserva.
+
+\sourcecode{contracts/FundingPool.sol}{330}{338}{Solidity}
+Qui invece avviene l'invio. Si legge il credito del chiamante, lo si azzera
+prima della chiamata esterna e si trasferisce l'importo al suo wallet.
+Se il trasferimento fallisce, il revert ripristina anche il credito.
+
+\lead{Perché separare i due momenti?}
+Durante il rimborso non inviamo ETH a tutti i contributor uno per uno. Ognuno
+ritira il proprio gain con una chiamata esplicita: è il modello \emph{pull},
+cioè ``vengo a prendere ciò che mi spetta''. Si separa il guadagno dal capitale
+prestabile e non si delega a ogni destinatario l'esito della distribuzione
+durante una rata.
+
+\oral{perché azzeri pendingInterestGain prima di inviare ETH?}{Per impedire che
+un contratto destinatario rientri e incassi di nuovo lo stesso credito. Se
+richiama la funzione, il credito è già zero. Se invece l'invio fallisce,
+l'intera operazione viene annullata e il credito non è perso.}
+
+\chapterpage{14 / IL FALLIMENTO}{Una scadenza non esegue codice}{Il default viene registrato quando qualcuno manda una transazione valida.}
+Supponiamo che il prestito scada al blocco 100. Un rimborso completo nel blocco
+100 è ancora puntuale. Dal 101 è tardivo. Il nodo non chiama automaticamente
+una funzione allo scoccare del blocco: finché non avviene una transazione,
+lo stato salvato può ancora dire Funded.
+
+\sourcecode{contracts/LoanContract.sol}{150}{156}{Solidity}
+Questa funzione verifica che il prestito sia ancora finanziato e che il blocco
+di scadenza sia stato superato. Poi aggiorna lo stato del prestito, avvisa il
+pool e produce un evento. Non è riservata al borrower: i controlli sullo stato
+e sul tempo impediscono di dichiarare fallito un prestito non ancora scaduto.
+
+\sourcecode{contracts/FundingPool.sol}{423}{435}{Solidity}
+Dentro questo callback \code{msg.sender} è il contratto del prestito.
+Il pool verifica che sia autorizzato. \code{isLoanFailed} impedisce di aumentare
+più volte il contatore dei fallimenti; \code{loanResolved} impedisce di scalare
+più volte quello degli attivi. Alla prima registrazione si aggiustano anche
+le percentuali: fallimento $+5$ punti, successo $-5$, nei limiti 1--100\%.
+
+Un rimborso tardivo o una richiesta di compensazione possono anch'essi registrare
+il default. Il prestito fallito accetta ancora pagamenti, ma non torna Repaid:
+il denaro recuperato dopo non cancella il fatto che Bob fosse in ritardo.
+
+\oral{un prestito risolto è per forza tutto rimborsato?}{No. Risolto significa
+che abbiamo registrato l'esito, anche fallimento. Può non esserci più fra gli
+attivi e avere ancora capitale non recuperato. Per questo il contatore degli
+attivi non basta per sapere quanti ETH Alice può ritirare.}
+
+\chapterpage{15 / LA COMPENSAZIONE}{Recuperare solo ciò che c'è}{La riserva aiuta a coprire una perdita, ma non la garantisce per intero.}
+Nella demo Bob non restituisce un prestito di 0,5 ETH. La riserva contiene solo
+0,025 ETH, prodotti dal primo prestito andato bene. Prima dell'estratto, la
+funzione controlla prestito, scadenza e credito della persona e, se serve,
+registra il default.
+
+\sourcecode{contracts/FundingPool.sol}{361}{383}{Solidity}
+All'inizio si limita il pagamento al minore tra credito residuo e riserva.
+Se il risultato è zero, si emette comunque l'evento e si termina senza ridurre
+il credito: Alice potrà riprovare se la riserva viene alimentata di nuovo.
+
+Quando vengono pagati 0,025, diminuiscono \emph{sia} il credito bloccato
+\emph{sia} il totale di Alice. Con 50 totali e 0,5 bloccati, il disponibile
+è 49,5. Dopo il pagamento resta $49{,}975-0{,}475=49{,}5$.
+Il disponibile non sale: gli ETH sono già stati inviati al wallet.
+
+\oral{perché sottrai anche da totalContributed?}{Perché sto pagando fuori dal
+pool, non rendendo capitale ritirabile una seconda volta. Se riducessi solo
+il bloccato, Alice riceverebbe 0,025 nel wallet e vedrebbe salire di altri
+0,025 il saldo da ritirare. Sarebbe un doppio beneficio per lo stesso pagamento.}
+
+\chapterpage{16 / ORACLE SU ETHEREUM}{Una richiesta e una risposta separata}{Il contratto registra il saldo, ma non legge da solo la rete Bitcoin.}
+\sourcecode{contracts/BitcoinOracle.sol}{33}{38}{Solidity}
+Bob paga almeno \code{minFee} e viene emesso \code{UpdateRequested}.
+Qui non viene ancora scritto alcun saldo. L'evento è una richiesta che
+il servizio Python deve osservare e servire: pagare non significa ricevere
+una risposta sincrona nella stessa chiamata.
+
+\sourcecode{contracts/BitcoinOracle.sol}{45}{48}{Solidity}
+Questo è il secondo momento. Il servizio firma con la chiave dell'operatore;
+\code{onlyOwner} limita chi può aggiornare il registro. Il numero è in satoshi,
+non in BTC decimali e non in wei. Dopo la scrittura un evento segnala la risposta.
+
+\sourcecode{contracts/BitcoinOracle.sol}{54}{56}{Solidity}
+Il pool legge il valore memorizzato. Un mapping non valorizzato restituisce
+zero: dalla sola lettura zero non posso distinguere indirizzo vuoto da indirizzo
+mai aggiornato. La demo aspetta quindi un evento nuovo dopo la propria richiesta.
+Anche un evento con saldo zero è una risposta valida, ma non dà capacità di prestito.
+
+\lead{Il costo e il limite di fiducia}
+La fee minima è calibrata sul nostro build: 49.426 gas per 0,1 gwei, cioè
+0,0000049426 ETH. Gas e prezzo del gas sono due quantità diverse.
+L'operatore è fidato: il controllo dell'owner evita scritture non autorizzate,
+ma non prova che l'operatore stia dicendo il vero.
+
+\oral{quindi i Bitcoin vengono bloccati a garanzia?}{No. Verifichiamo un saldo
+storico, ma non proviamo che Bob controlli quell'indirizzo e non blocchiamo i BTC.
+È il modello semplificato del progetto, non una garanzia che il contratto possa
+sequestrare in caso di default. Il cambio è fissato a 30 ETH per BTC.}
+
+\chapterpage{17 / IL SALDO BITCOIN}{Contare soltanto gli output non spesi}{Un esempio concreto prima dei dizionari Python.}
+Immagina che Alice riceva un output da 2 BTC. Poi lo spenda per pagare Bob
+0,4 BTC, ricevendo 1,6 BTC di resto, trascurando la commissione nell'esempio.
+Non possiede $2+1{,}6$: il vecchio output da 2 è stato consumato. Ora possiede
+solo il nuovo output da 1,6. Un \emph{UTXO} è proprio un output non ancora speso.
+
+\sourcecode{python/oracle/oracle_service.py}{94}{106}{Python}
+Per una transazione ordinaria, gli input indicano vecchi output da eliminare.
+La coppia \code{spent\_txid, spent\_vout} identifica precisamente quale output
+è stato speso. Poi il ciclo sugli output registra i nuovi importi e gli indirizzi
+riconoscibili dal parser. \code{None} nella lista delle modifiche significa
+``elimina questo output'', non ``il suo valore è zero''.
+
+La coinbase viene trattata separatamente perché crea nuovi output senza spendere
+un output precedente ordinario. La ricompensa originale del genesis è esclusa:
+non fa parte degli output spendibili. Eventuali donazioni successive allo stesso
+indirizzo, invece, possono comparire nel saldo.
+
+\sourcecode{python/oracle/oracle_service.py}{124}{125}{Python}
+\code{addr\_utxos} raccoglie gli output ancora presenti per indirizzo.
+La funzione somma i loro valori. Se l'indirizzo non è presente, \code{get}
+restituisce il dizionario vuoto e la somma vale zero.
+
+\lead{Perché preparare prima le modifiche del blocco?}
+La funzione costruisce la lista di rimozioni e inserimenti prima di applicarla.
+Se c'è un errore, non vogliamo lasciare mezzo blocco nei registri. Il codice
+conserva i vecchi valori dei soli output toccati per poter annullare l'applicazione,
+senza copiare ogni volta l'intero insieme UTXO.
+
+\oral{perché non sommi tutte le transazioni ricevute dall'indirizzo?}{Perché
+contarei anche denaro che è già stato speso. Per sapere il saldo devo ricostruire
+gli output ancora utilizzabili dopo aver applicato entrate e spese in ordine.}
+
+\chapterpage{18 / L'ATTESA DELL'ORACLE}{Che cosa significa ORACLE READY}{Non è una pausa scelta a caso: è la fine della ricostruzione dello snapshot.}
+All'avvio l'oracle legge i file Bitcoin locali. Il parser sceglie la catena
+collegata al genesis con il lavoro cumulativo maggiore e applica in ordine
+i primi \textbf{131.000 blocchi}, dalle altezze 0 a 130.999. Controlla anche hash
+e Merkle root, ma non implementa tutte le regole di consenso di un nodo Bitcoin.
+
+\sourcecode{python/oracle/oracle_service.py}{134}{144}{Python}
+Il ciclo pretende l'altezza successiva a quella già elaborata. Dopo ogni blocco
+incrementa il contatore; alla fine rifiuta una sequenza troppo corta.
+Non salta un blocco danneggiato per continuare pubblicando saldi incompleti.
+Se la sincronizzazione fallisce, gli indici vengono svuotati e il servizio
+non si dichiara pronto.
+
+\sourcecode{python/oracle/oracle_service.py}{195}{201}{Python}
+La coda degli eventi viene aperta prima della lettura lunga. Poi si ricostruisce
+Bitcoin, si stampa \code{ORACLE READY} e si cominciano a servire le richieste.
+Partire dal blocco di deployment evita di dimenticare richieste arrivate
+mentre il programma era ancora occupato con Bitcoin.
+
+\lead{Due memorie diverse, da non confondere}
+Il saldo Bitcoin viene ricostruito in RAM: a ogni riavvio ricomincia il replay.
+SQLite conserva invece eventi Ethereum e transazioni da inviare, non una cache
+dei saldi BTC. Una volta pronto, l'oracle risponde usando l'indice in memoria,
+senza rileggere tutti i blocchi per ogni richiesta.
+
+\oral{un aggiornamento fresco contiene il saldo BTC di oggi?}{No. È una nuova
+risposta ottenuta dallo snapshot storico richiesto. ``Fresco'' nella demo
+significa successivo alla nostra richiesta Ethereum, non aggiornato all'ultimo
+blocco Bitcoin mondiale. Per questo aspetto READY, non un numero fisso di secondi.}
+
+\chapterpage{19 / IL VOTER AUTOMATICO}{Chi manda davvero il voto YES}{Python esegue una strategia; il contratto applica le regole.}
+Il voter legge gli eventi \code{LoanProposed}. Per ogni proposta cerca di
+registrare YES con l'account configurato. Non assegna direttamente il prestito
+e non salta i controlli di contributo, voto unico e risoluzione.
+
+\sourcecode{python/voter/auto_voter.py}{27}{42}{Python}
+Se l'account ha già votato YES, non viene mandata un'altra transazione.
+Se aveva votato NO, il programma segnala un errore definitivo: non può cambiare
+un voto già registrato. Se la proposta o il servizio sono chiusi, non insiste
+come se fosse un problema temporaneo di rete.
+
+Il controllo sul contributo usa il totale, non il disponibile. Se Alice ha
+10 ETH interamente bloccati, può ancora votare con peso corrente zero. Se prima
+della risoluzione un altro prestito le restituisce capitale, il suo peso potrà
+diventare positivo. Questa regola deve essere rispettata sia da Solidity sia
+dal programma Python.
+
+\lead{Perché il programma legge prima di scrivere?}
+Per capire se la richiesta è ancora da eseguire, se è già stata soddisfatta
+o se ormai non può più esserlo. Un'interruzione può avvenire dopo che il voto
+è arrivato on-chain ma prima che il programma abbia salvato l'esito locale.
+Ricontrollare lo stato evita di trattare quel caso come un nuovo voto.
+
+\oral{dove si vede che la strategia è sempre YES?}{Nella riga 41:
+\code{voteOnProposal(proposal\_id, True)}. Il booleano passato è vero.
+I controlli prima non scelgono una proposta conveniente: verificano solo che
+il voto possa ancora essere registrato correttamente. La maggioranza resta
+calcolata dal contratto, usando tutti i contributor.}
+
+\chapterpage{20 / EVENTI E RIAVVII}{Come evitiamo di perdere una richiesta}{Pensala come una lista di lavori da fare e di risposte già preparate.}
+Un servizio non deve fidarsi soltanto della memoria del processo: se si chiude,
+quella memoria sparisce. SQLite conserva quali eventi sono arrivati, quali
+restano da servire e quali transazioni sono già state preparate.
+
+\sourcecode{python/durable_events.py}{52}{62}{Python}
+\code{with self.db} raggruppa inserimento degli eventi e aggiornamento del cursore
+in una transazione SQLite. Il cursore indica da quale blocco cercare la prossima
+volta. Non devo avanzarlo senza aver salvato i lavori: dopo un crash salterei
+richieste che non ho mai servito. \code{INSERT OR IGNORE} evita il doppione
+di un evento già presente con lo stesso identificativo.
+
+\sourcecode{python/durable_events.py}{173}{177}{Python}
+Qui la risposta viene firmata e salvata \emph{prima} dell'invio. Se cade la
+connessione dopo la trasmissione, al riavvio posso cercare la stessa transazione
+e, se necessario, ritrasmettere gli stessi byte. Non creo alla cieca una risposta
+nuova con un altro nonce, che potrebbe pagare due volte la stessa operazione.
+
+\lead{Nonce e hash, senza confonderli}
+Il nonce ordina le transazioni di un account. L'hash identifica quella precisa
+transazione firmata. Gli account dei servizi devono essere dedicati: se un altro
+programma ne usa i nonce, possiamo incontrare conflitti da ispezionare.
+La ricevuta dice poi se la transazione è stata inclusa ed è riuscita.
+
+\oral{SQLite garantisce che tutto avvenga esattamente una volta in ogni rete?}{No.
+Rende affidabili i retry nel contesto della catena privata prevista. I checkpoint
+di hash segnalano reset o riorganizzazioni; non c'è una procedura automatica
+generale di recupero dalle reorg. Di fronte a un guasto RPC non cancello la
+coda: controllo prima lo stato del nodo e della transazione salvata.}
+
+\chapterpage{21 / SETUP E TRANSAZIONI}{Dal programma Python alla blockchain}{Creare un account, firmare e aspettare una ricevuta sono passaggi distinti.}
+\code{setup.sh} prepara gli strumenti e compila; \code{python/setup.py} crea
+gli account e distribuisce i contratti. Il setup genera deployer, contributor
+e borrower; l'account prefunded fornito dal corso li finanzia soltanto.
+
+\sourcecode{python/setup.py}{57}{67}{Python}
+Ogni account riceve 100 ETH. Il prefunded firma questi trasferimenti, ma non
+è l'account che distribuisce oracle e pool. Il nuovo deployer crea oracle,
+implementazione e proxy, poi lo script verifica owner e configurazione.
+I file \code{.env} locali conservano le chiavi generate: non vanno consegnati
+né mostrati in una schermata d'esame.
+
+\sourcecode{python/simulate.py}{27}{35}{Python}
+\code{build\_transaction} costruisce i dati per chiamare una funzione del contratto.
+\code{value} è l'importo da inviare; il nonce usa anche le transazioni pendenti;
+il chain ID è 202526, quello del corso. L'account firma localmente. Il nodo
+riceve i byte firmati e il client aspetta la ricevuta, controllandone lo stato.
+
+Un hash restituito dal nodo non basta a dire ``operazione riuscita''.
+La transazione potrebbe essere ancora pendente o essere inclusa con revert.
+L'ABI serve al client per codificare nomi, argomenti ed eventi del contratto;
+il bytecode serve invece quando si distribuisce un nuovo contratto.
+
+\oral{perché non chiami tutto con .call()?}{Perché una lettura \code{.call()}
+non salva una modifica sulla blockchain. Per depositare, votare o rimborsare
+serve una transazione firmata e inclusa in un blocco. Leggere il saldo con
+\code{.call()} è diverso dalla \code{call} Solidity che può inviare ETH.}
+
+\chapterpage{22 / PROXY E UPGRADE}{Cambiare la logica senza cambiare indirizzo}{Lo stato del pool rimane nel proxy; i prestiti già creati restano autonomi.}
+Immagina che il proxy sia l'indirizzo della cassa e l'implementazione sia il
+manuale di istruzioni. Cambiare manuale non crea una nuova cassa né sposta
+automaticamente i fondi. Il proxy delega l'esecuzione mantenendo il proprio
+storage e saldo: è l'idea della \emph{delegatecall}. Anche \code{msg.sender}
+rimane quello della chiamata al proxy: non è una normale chiamata che parte
+dal proxy verso un altro contratto.
+
+\sourcecode{contracts/FundingPoolProxy.sol}{9}{12}{Solidity}
+Il costruttore riceve l'implementazione e include già la chiamata a
+\code{initialize}. Così il proxy nasce inizializzato: non rimane una finestra
+in cui un estraneo può chiamare per primo e diventare owner.
+\code{ERC1967Proxy} usa uno slot standard per conservare l'indirizzo
+dell'implementazione, separandolo dai dati applicativi.
+
+\sourcecode{contracts/FundingPool.sol}{114}{127}{Solidity}
+Il costruttore blocca l'inizializzazione dell'istanza di implementazione.
+Il proxy inizializza invece il proprio stato tramite la logica: imposta owner,
+oracle e collateral iniziale al 50\%. \code{initializer} evita di rifarlo.
+L'override alla riga 127 riserva l'upgrade all'owner, sfruttando il meccanismo UUPS.
+
+\lead{Che cosa devo preservare durante un upgrade?}
+Il significato e la disposizione dello storage esistente. Se cambio l'ordine
+delle variabili senza una migrazione compatibile, la nuova logica potrebbe
+leggere vecchi valori come se fossero altri dati. I test V2 controllano alcuni
+casi concreti; non rendono sicuro qualunque aggiornamento futuro.
+
+\oral{se aggiorni il pool, cambia anche il codice dei LoanContract?}{No.
+Ogni prestito è un contratto autonomo, non un proxy di questo pool. Il suo
+bytecode e i termini fissati restano quelli iniziali. Anche per questo una
+nuova logica del pool deve continuare a gestire i callback dei vecchi prestiti.}
+
+\chapterpage{23 / REENTRANCY}{Perché il destinatario può richiamarci}{Un trasferimento a un contratto può far eseguire altro codice.}
+Il pool normale riduce i registri prima di trasferire ETH. Per mostrare il rischio,
+nei test esiste anche una variante volutamente errata: invia prima e aggiorna dopo.
+Non viene distribuita dal setup del servizio.
+
+\sourcecode{contracts/test/FundingPoolVulnerable.sol}{14}{23}{Solidity}
+Durante la chiamata esterna, il saldo non è ancora stato ridotto. Il contratto
+attaccante riceve ETH e richiama \code{withdraw()}; il pool vede ancora il credito
+precedente e invia di nuovo. Alla fine vengono riscritti i valori salvati prima
+della ricorsione, ormai vecchi.
+
+\sourcecode{contracts/test/ReentrancyAttacker.sol}{30}{37}{Solidity}
+La funzione \code{receive()} viene eseguita quando arrivano ETH senza dati.
+Se il pool ha ancora denaro, l'attaccante tenta un altro prelievo. La chiamata
+a basso livello restituisce un booleano: se il pool normale rifiuta la
+ricorsione, l'attaccante può lasciar terminare il prelievo iniziale legittimo.
+
+Nei test l'onesto mette 10 ETH e l'attaccante 1. La variante vulnerabile può
+essere svuotata anche dei 10 altrui. Nel pool normale la ricorsione fallisce
+e rimangono i fondi dell'onesto.
+
+\oral{bastava spostare una sottrazione dopo la call?}{Non necessariamente.
+In Solidity 0.8 una sottrazione sul saldo corrente può andare in underflow
+dopo una chiamata ricorsiva e annullare tutto l'attacco. La nostra variante
+usa assegnazioni con valori vecchi per mostrare un furto effettivo. Spiego
+questo codice preciso, non sostengo che ogni variante apparentemente simile
+sia sfruttabile allo stesso modo.}
+
+\chapterpage{24 / TEST E GAS}{Come leggere una prova}{Un test prepara una situazione, esegue un'azione e controlla il risultato.}
+\sourcecode{test/trace_compliance.test.ts}{20}{31}{}
+\code{deployProtocol()} prepara contratti e account isolati. Tre persone
+depositano 2, 3 e 6 ETH; poi viene richiesto un prestito di 4. \code{await}
+aspetta il completamento delle operazioni asincrone del test.
+Le ultime due righe controllano che il capitale sia inferiore alla richiesta
+per arrotondamento e coincida con la somma delle quote calcolate per difetto.
+\code{BigInt}, riconoscibile dal suffisso \code{n}, permette conti interi.
+
+\sourcecode{test/gas_profiling.test.ts}{12}{16}{}
+Questo helper aspetta la ricevuta e registra \code{gasUsed}, il gas consumato.
+Non usa il limite massimo di gas inviato con la transazione.
+Il costo in wei si ottiene moltiplicando il gas consumato per il prezzo del gas.
+Per esempio 49.426 gas per 0,1 gwei fanno 4.942.600.000.000 wei.
+
+I risultati riportati nel progetto sono 32 test contratti, di cui 4 Solidity
+e 28 TypeScript, e 49 test Python offline. Uno scenario Solidity esegue
+256 casi fuzz, cioè varia gli input per controllare una proprietà.
+Non sono 256 ulteriori test distinti. Il profiling copre 20 scenari.
+
+\lead{Che cosa non dimostra un singolo test}
+Il test isolato può minare blocchi immediatamente; la demo Geth no.
+Un mock Python non prova che tutto il dataset reale venga letto correttamente.
+Il gas con un contributor non è una stima universale per mille contributor.
+Il target del compilatore è Berlin, compatibile con il genesis del corso.
+
+\oral{dove trovo la prova di una regola specifica?}{Cerco il test per scenario:
+\code{trace\_compliance.test.ts} per i comportamenti di traccia,
+\code{requirements\_boundaries.test.ts} per i limiti,
+\code{reentrancy.test.ts} per l'attacco e \code{upgrade.test.ts} per il proxy.
+Posso spiegare preparazione, azione e controllo, non solo dire ``i test passano''.}
+
+\chapterpage{25 / REGOLE ED ECONOMIA}{Un comportamento scorretto senza bug}{Rispettare il codice non rende ogni incentivo automaticamente sicuro.}
+Supponiamo che una persona malevola metta 6 ETH e una persona onesta 4.
+La prima controlla la maggioranza e si accorda con il borrower. Può far approvare
+un prestito di 10 ETH, purché superi i controlli, e il gruppo può poi non rimborsarlo.
+
+Il gruppo riceve 10, ma 6 erano già capitale proprio: il guadagno netto ai danni
+dell'onesto è 4, trascurando gas e altri flussi. Dire che guadagna 10 sarebbe
+contare come profitto anche denaro che possedeva prima.
+
+Il dato BTC non impedisce questo comportamento: non richiediamo prova del
+possesso dell'indirizzo né blocchiamo i Bitcoin. Inoltre la priorità di recupero
+del capitale favorisce chi aveva la quota iniziale più grande. Sono conseguenze
+delle regole economiche, non un attacco di reentrancy.
+
+\lead{Perché non cambiare subito il sistema di voto?}
+Si potrebbero immaginare altre garanzie, ma il progetto segue la traccia.
+Cambiare il peso corrente in uno snapshot di voto, introdurre un vero vincolo
+su Bitcoin o redistribuire il rischio in altro modo significherebbe cambiare
+il protocollo. All'orale distinguo ciò che abbiamo implementato da possibili
+evoluzioni, senza attribuire al progetto protezioni che non possiede.
+
+\sourcecode{contracts/FundingPool.sol}{133}{137}{Solidity}
+Questa è la terminazione amministrativa. Solo l'owner può attivarla e non
+devono esserci prestiti attivi. \code{terminated} blocca il nuovo business,
+non distrugge il contratto. Restano le operazioni previste di prelievo,
+incasso e recupero. Un default risolto può comunque lasciare un credito scoperto.
+
+\oral{se terminate vale true, gli ETH spariscono?}{No. È un flag che alcune
+funzioni controllano tramite \code{notTerminated}. Non è un selfdestruct e
+non rende liquido il capitale non recuperato. Devo guardare quali funzioni
+usano il modifier, non immaginare che il flag spenga ogni singola operazione.}
+
+\chapterpage{26 / LA DEMO CONCRETA}{Prima il successo, poi il default}{Collegare i messaggi sul terminale alle funzioni già studiate.}
+La demo si avvia con oracle e voter già in esecuzione. Prima aspetta una
+risposta BTC nuova, poi finanzia la posizione del contributor. Nel percorso
+standard, su deployment nuovo, il deposito è 50 ETH e il primo prestito è 1 ETH
+al 5\%. Due rate da 0,525 lo chiudono: gain e riserva ricevono 0,025 ciascuno.
+Il gain viene incassato e il collateral globale scende da 50 a 45\%.
+
+\sourcecode{python/simulate.py}{268}{280}{Python}
+Il secondo prestito usa metà del capitale richiesto e dura tre blocchi.
+\code{max(1, principal // 2)} evita zero per importi minuscoli; \code{//} è
+divisione intera Python. \code{wait\_for\_expiry} aspetta un blocco strettamente
+maggiore di \code{dueBlock}. La richiesta di compensazione registra il default
+e paga il minore fra credito e riserva. Poi la demo ripete la richiesta per
+mostrare il comportamento con riserva vuota.
+
+\begin{tabularx}{\linewidth}{@{}Xr@{}}
+\toprule Stato finale del percorso standard & Valore\\\midrule
+Primo prestito / secondo prestito & Repaid / Defaulted\\
+Compensazione pagata / secondo tentativo & 0,025 / 0 ETH\\
+Posizione totale del contributor & 49,975 ETH\\
+Disponibile / bloccato residuo & 49,5 / 0,475 ETH\\
+Riserva / gain da incassare & 0 / 0 ETH\\
+Prestiti attivi / falliti & 0 / 1\\
+Collateral globale & 50\%\\\bottomrule
+\end{tabularx}
+
+Questi numeri descrivono un deployment nuovo con un contributor. Su uno già
+usato, altri saldi e riserve possono cambiare i risultati. I wallet pagano anche
+il gas, quindi non vanno confrontati con somme che lo ignorano. La prova Geth
+salvata in \code{docs/default-demo-verification.json} registra 20 ricevute riuscite
+e 16 controlli finali per i sorgenti identificati dagli hash.
+
+\oral{perché il bloccato non torna a zero alla fine?}{Perché il secondo prestito
+non è stato rimborsato. Solo 0,025 dei suoi 0,5 ETH sono stati recuperati dalla
+riserva. I rimanenti 0,475 sono un credito non recuperato, non ETH ritirabili.}
+
+\chapterpage{27 / PREPARARSI ALLA LETTURA}{Se il professore indica una riga}{Parti dal contesto, poi spiega l'effetto e il motivo.}
+Non iniziare traducendo ogni simbolo se non hai ancora detto dove ti trovi.
+Puoi usare questo ordine: ``Questa funzione viene chiamata da\ldots;
+serve a\ldots; prima controlla\ldots; poi aggiorna\ldots;
+questa scelta evita\ldots''. Un piccolo esempio numerico rende la risposta
+molto più chiara di un elenco di parole tecniche.
+
+\qa{Ti indica: totalContributed - lockedContributions.}{``Sto calcolando il
+capitale libero della persona. Se ha 10 ETH totali e 4 prestati, ne può
+usare o ritirare 6. Non sto leggendo il saldo del suo wallet.''}
+
+\qa{Ti indica: proposal.noVotes = currentDisposable - currentYesVotes.}{``Tutto
+il capitale disponibile non associato a un YES viene contato come NO.
+Comprende anche chi non ha votato. I pesi sono quelli attuali alla risoluzione.''}
+
+\qa{Ti indica: initialLoanContributions e loanContributions.}{``La prima conserva
+il contributo iniziale per priorità e interessi; la seconda è il credito
+residuo, che diminuisce con rimborsi e compensazioni. Non sono due fondi separati.''}
+
+\qa{Ti indica: !loanResolved[msg.sender].}{``Sto evitando di trattare due volte
+la chiusura dello stesso prestito. Il contatore degli attivi non deve scendere
+a ogni callback successivo. Qui msg.sender è il contratto del prestito.''}
+
+\qa{Ti indica: if (actualCompensation == 0) return.}{``Il credito è valido, ma
+non c'è riserva. Il default è stato registrato prima; esco senza cancellare il
+credito. In futuro si può riprovare se arrivano fondi nella riserva.''}
+
+\qa{Ti indica: balances[btcAddress] = balanceInSatoshi.}{``Salvo in Ethereum
+la risposta pubblicata dall'operatore. Non ricostruisco Bitcoin in questa riga;
+quel lavoro è nel programma Python. Solo l'owner può aggiornare questo dato.''}
+
+\qa{Ti indica: store.save\_transaction prima di send\_raw\_transaction.}{``Salvo la
+risposta firmata prima di inviarla. Se il processo si interrompe, posso cercare
+e ritentare quella stessa transazione senza crearne una nuova alla cieca.''}
+
+\begin{keybox}{L'ultimo ripasso}
+Apri a caso una delle funzioni mostrate. Spiega un caso riuscito e uno rifiutato,
+chi è il chiamante e che cosa cambia nei saldi. Se dici ``è per sicurezza'',
+aggiungi quale problema preciso evita. Se dici ``lo richiede la traccia'',
+distingui la regola dalla nostra scelta di implementazione. Non occorre ricordare
+il numero di riga: occorre sapersi orientare nel flusso del prestito.
+\end{keybox}
+\end{document}

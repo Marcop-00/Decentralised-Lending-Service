@@ -1,0 +1,35 @@
+{
+  "verified_at_utc": "2026-11-05T15:17:04.425826+00:00",
+  "client": "Geth/v1.13.14-stable-2bd6bd01/darwin-arm64/go1.21.6",
+  "chain_id": 202526,
+  "genesis_sha256": "19dc057b942427491411223520132312745856c3beef37d26882ec43f8211571",
+  "source_sha256": {
+    "contracts/FundingPool.sol": "50effabc10c0f8d0d6d0db95fb237d859f0f7251731cc8bd053ca4ac343a574e",
+    "contracts/LoanContract.sol": "2cda5c9daf3568146de7f0293fedbf59ea3b808874fe843ea305a7773bc5bb23",
+    "contracts/BitcoinOracle.sol": "dfff645937c46c42923259915635e9413bb23342c52558ae73dc04c2874823b4",
+    "python/simulate.py": "4b45b19bc52815b61f01fb0ef5e1b29fb2f066ec59d2a8bfb7600fc6ea1e4149",
+    "python/oracle/oracle_service.py": "b490644a4fd305679913bd85e41be5732357b446636dc96b2036169a25e5ecb0",
+    "python/voter/auto_voter.py": "919448dad422dc200c3a92525a2f764cfa76a0634ef84958fa92db045e8645a4"
+  },
+  "successful_receipts": 20,
+  "final_checks": 16,
+  "final_state": {
+    "first_loan_status": 2,
+    "second_loan_status": 3,
+    "total_contributed_wei": 49975000000000000000,
+    "locked_wei": 475000000000000000,
+    "disposable_wei": 49500000000000000000,
+    "pool_disposable_wei": 49500000000000000000,
+    "pool_cash_wei": 49500000000000000000,
+    "reserve_wei": 0,
+    "pending_gain_wei": 0,
+    "active_loans": 0,
+    "failed_loans": 1,
+    "global_collateral_percent": 50,
+    "first_collateral_percent": 50,
+    "second_collateral_percent": 45,
+    "compensation_payouts_wei": [25000000000000000, 0],
+    "remaining_principal_wei": 475000000000000000
+  },
+  "notes": "Isolated course-genesis chain; real 131000-block Bitcoin replay; no user chain or environment modified."
+}
