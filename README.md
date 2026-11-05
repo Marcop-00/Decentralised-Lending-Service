@@ -14,6 +14,12 @@ BTC are not locked: this is the professor's didactic simplification.
 - Both services use a durable SQLite event inbox and signed transaction outbox.
 - Python setup creates accounts and deploys; the Python demo interacts with Geth.
 
+The normal flow is: fund a contributor, request a Bitcoin balance, deposit ETH,
+propose a loan, vote, resolve after at least 12 blocks, repay and claim interest.
+If a loan expires unpaid, its contributors can request compensation instead.
+The vulnerable contract, attacker and V2 are demonstrations for the tests; the
+service setup deploys only the oracle, pool implementation and proxy.
+
 ## Laboratory stack
 
 Hardhat **3.18.1**, TypeScript **6.0.3**, **node:test**, **viem 2.57.3**.
@@ -38,8 +44,9 @@ Run from this project directory:
 
 Setup installs dependencies, compiles and obtains Geth. It does not start a chain
 or deploy contracts. Hardhat tests use isolated simulated chains.
-Gas profiling writes **docs/gas-measurements.json** from transaction receipts,
-plus Hardhat statistics. Figures depend on hardfork, storage and contributor count.
+Gas profiling writes **docs/gas-measurements.json** from transaction receipts
+and prints Hardhat statistics. The JSON is the single source for the report's
+gas table. Figures depend on hardfork, storage and contributor count.
 Coverage runs exercise the same scenarios without overwriting gas measurements
 with costs from instrumented bytecode. HTML coverage is saved in coverage/html.
 
@@ -57,14 +64,8 @@ capacity. It checks genesis, connected block count, payload hashes and Merkle
 roots. It is a trusted-data parser, not a full Bitcoin consensus node. The genesis
 reward is excluded; subsequent outputs to the same address remain valid.
 
-**Replacement data validated on 11 October 2026:** the seven blk*.dat files
-contain a connected chain of 162,844 blocks. The offline replay successfully
-validated the required first 131,000 blocks (heights 0–130,999), reconstructing
-299,208 UTXOs and 153,986 address entries. Both local copies have identical SHA256
-hashes. The earlier incomplete-data issue is resolved; see
-docs/bitcoin-validation.json for the replay result. The full Geth demo also passed
-on an isolated instance of the same course genesis; evidence is in
-docs/geth-demo.json. The service still refuses incomplete data.
+The service refuses incomplete data. Historical validation evidence is kept in
+docs/bitcoin-validation.json; rerun the command above when replacing the dataset.
 
 ## Start the private chain
 
@@ -116,16 +117,6 @@ BTC_ADDRESS can alternatively be set in the demo environment. The demo waits for
 a fresh oracle event, checks actual liquidity, proposes, waits for the configured
 contributor's YES, resolves, repays in two installments and claims gains. All
 receipt statuses are checked and balances/state are printed along the way.
-
-The verified Geth 1.13.14 run used the unchanged course genesis (Clique, 10-second
-blocks), localhost port 18545, no P2P peers and a 0.1 gwei mining gas price. All four
-Python scripts ran successfully: 15 successful transaction receipts, 20 final
-state assertions and one completed persistent event in each service queue.
-A 1 ETH loan at 5% was repaid in two 0.525 ETH installments; the contributor
-claimed 0.025 ETH gross gain and compensation retained 0.025 ETH. Final disposable
-capital was 50 ETH, locked capital zero, and the global collateral percentage 45%.
-The isolated test node/services were stopped; existing local deployment settings
-were preserved. docs/geth-demo.json records receipts, state and source hashes.
 
 Services resume scanning from deployment/the saved cursor. Event insertion and
 cursor advancement are atomic. Pending requests survive restarts and failures;
@@ -192,14 +183,36 @@ Empty contributor positions are removed and sorting is performed once per loan.
 Operations still scale with active contributor count; unlimited participation
 within the block gas limit is outside this didactic design.
 
-## Files and submission
+## File guide
 
-- contracts/: protocol, proxy, oracle, loan and ordering library.
-- contracts/test/: native Solidity tests, compatible V2 and vulnerable variant.
-- test/: TypeScript node:test/viem tests and deployment helper.
-- python/: setup, demo, persistent event processing, oracle, voter and offline tests.
-- private-chain/: genesis and Geth setup.
-- docs/: report source/PDF and gas measurements.
+| File or directory | Purpose |
+| --- | --- |
+| contracts/FundingPool.sol | Contributions, votes, loan creation, interest and compensation accounting. |
+| contracts/FundingPoolProxy.sol | Holds ETH and state while allowing the pool implementation to be upgraded. |
+| contracts/LoanContract.sol | One loan's installments, expiry and repayment state. |
+| contracts/BitcoinOracle.sol | Paid update requests and Bitcoin balances stored on Ethereum. |
+| contracts/ContributorOrder.sol | Orders contributors for principal refunds. |
+| contracts/test/ | V2 upgrade example, unsafe pool, attacker and native Solidity tests; not deployed by setup. |
+| test/ | TypeScript tests, deployment helpers and gas profiling. |
+| python/setup.py | Creates accounts, funds them and deploys the service on Geth. |
+| python/simulate.py | Runs the example loan workflow and prints balances/state. |
+| python/oracle/ | Bitcoin block parser, offline data checker and running oracle service. |
+| python/voter/auto_voter.py | Always-YES contributor strategy required by the trace. |
+| python/durable_events.py | Shared event scanning, retry and transaction handling for both services. |
+| python/tests/ | Offline tests for Bitcoin data and service reliability. |
+| private-chain/ | Course genesis, supplied account and local Geth installation/data. |
+| docs/report.tex, docs/report.pdf | Source and final report for submission. |
+| docs/gas-measurements.json, docs/gas-table.tex | Measured gas costs and the generated report table. |
+
+setup.sh installs the development tools; python/setup.py deploys the application.
+Neither test fixtures nor test contracts are alternative service implementations.
+
+node_modules/, .venv/, artifacts/, cache/ and coverage/ are generated development
+directories. They are not application source. Keep the local Bitcoin files, chain
+data, .env files and service queues when continuing an existing deployment.
+`npm run clean` clears Hardhat build output; subsequent tests/builds recreate it.
+
+## Report and submission
 
 To regenerate the report after profiling:
 
@@ -209,6 +222,9 @@ To regenerate the report after profiling:
 
 The Geth demo recorded in docs/geth-demo.json verifies the 11 October 2026 sources
 and Bitcoin data; its source hashes identify that specific run.
+It used the course genesis, 15 successful receipts and 20 final state checks.
+docs/bitcoin-validation.json records the corresponding full Bitcoin replay.
+These files preserve historical evidence; they do not certify later code changes.
 Before submission, prepare the course ZIP with source, tests, configuration,
 lockfile, scripts and the report
 (maximum five pages). Omit node_modules, .venv, .env, event databases and regenerable

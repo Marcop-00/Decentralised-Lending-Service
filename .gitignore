@@ -31,6 +31,5 @@ private-chain/geth
 # Polling data files
 *.dat
 
-# Durable local event queues and oracle readiness snapshots
+# Durable local event queues
 python/**/events-*.sqlite3*
-python/**/sync-status*.json

@@ -24,13 +24,10 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     error VotingClosed();
     error VotingStillActive();
     error NoVotingPower();
-    error ProposalRejected();
     error InvalidAddress();
     error InvalidBitcoinAddress();
-    error ProposalRejectedByLiquidity();
     error InvalidVotingPeriod();
     error InvalidInterestRate();
-    error CompensationPoolEmpty();
     error ContractTerminated();
     error ActiveLoansExist();
     error DepositTooLow();
@@ -244,9 +241,8 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     /// @dev Locks funds across all contributors proportionally based on their current unlocked balances.
     /// @param requiredAmount The target principal amount to lock.
     /// @param proposalId The ID of the loan proposal.
-    /// @return totalLocked The total amount locked (may be slightly less than required due to integer division).
-    /// @return actualDisbursement The exact amount that should be sent to the borrower.
-    function _lockContributorsProportionally(uint256 requiredAmount, uint256 proposalId) internal returns (uint256 totalLocked, uint256 actualDisbursement) {
+    /// @return totalLocked The actual principal to disburse, after proportional rounding.
+    function _lockContributorsProportionally(uint256 requiredAmount, uint256 proposalId) internal returns (uint256 totalLocked) {
         uint256 totalDisposable = 0;
         for (uint256 i = 0; i < contributors.length; i++) {
             totalDisposable += unlockedBalanceOf(contributors[i]);
@@ -278,9 +274,6 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         }
 
         _prepareRefundOrder(proposalId);
-        uint256 discrepancy = requiredAmount - totalLocked;
-        actualDisbursement = requiredAmount - discrepancy;
-        return (totalLocked, actualDisbursement);
     }
 
     /// @dev Distributes interest gains proportionally based on initial locked contributions.
@@ -365,12 +358,6 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
             loan.markDefaulted();
         }
 
-        if (!isLoanFailed[proposalId]) {
-            isLoanFailed[proposalId] = true;
-            failedLoanCount += 1;
-            _adjustCollateralPercentage(false);
-        }
-        
         uint256 actualCompensation = owedAmount;
         if (actualCompensation > compensationPoolBalance) {
             actualCompensation = compensationPoolBalance;
@@ -567,8 +554,8 @@ contract FundingPool is Initializable, UUPSUpgradeable, OwnableUpgradeable {
 
         proposal.executed = true;
 
-        (uint256 lockedAmount, uint256 disbursedAmount) = _lockContributorsProportionally(proposal.principal, proposalId);
-        if (lockedAmount == 0) {
+        uint256 disbursedAmount = _lockContributorsProportionally(proposal.principal, proposalId);
+        if (disbursedAmount == 0) {
             emit LoanRejected(proposalId, "Failed to lock funds");
             return address(0);
         }

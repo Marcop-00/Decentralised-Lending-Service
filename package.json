@@ -6,7 +6,7 @@
     "clean": "hardhat clean",
     "compile": "hardhat build",
     "test": "hardhat test",
-    "test:gas": "hardhat test test/gas_profiling.test.ts --gas-stats --gas-stats-json docs/gas-stats.json",
+    "test:gas": "hardhat test test/gas_profiling.test.ts --gas-stats",
     "test:coverage": "hardhat test --coverage",
     "typecheck": "hardhat build && tsc --noEmit",
     "node": "hardhat node"

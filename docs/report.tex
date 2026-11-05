@@ -138,12 +138,13 @@ than implementing full Bitcoin consensus. The replacement seven-file dataset
 contains 162,844 connected blocks. Offline replay successfully validated the
 required first 131,000 blocks through height 130,999, reconstructing 299,208 UTXOs
 and 153,986 address entries. The earlier incomplete-data issue is resolved.
-The complete Python workflow also passed on Geth 1.13.14 with the unchanged
+The October 2026 Python workflow also passed on Geth 1.13.14 with the unchanged
 course genesis and 10-second Clique blocks: 15 successful transaction receipts,
 20 final state checks and both event queues completed. A 1 ETH loan at 5\%
 was repaid in two 0.525 ETH installments; the contributor claimed 0.025 ETH
 gross gain and compensation retained 0.025 ETH. Evidence is recorded in
-\texttt{docs/geth-demo.json}. No balance is published after a failed sync.
+\texttt{docs/geth-demo.json}; its source hashes identify that historical run.
+No balance is published after a failed sync.
 
 The Python services durably enqueue events before advancing the cursor. They
 resume from deployment, retry temporary errors and recover the same signed
@@ -204,7 +205,9 @@ Start the services in separate terminals:
 ./.venv/bin/python python/oracle/oracle_service.py
 ./.venv/bin/python python/voter/auto_voter.py
 \end{verbatim}
-Then choose a funded address from the successful snapshot summary:
+Wait for \texttt{ORACLE READY}: the oracle rebuilds its UTXO index in memory at
+every start, processing the first 131,000 blocks one at a time. No Bitcoin cache
+is saved to disk. Then choose a funded address from the snapshot summary:
 \begin{verbatim}
 ./.venv/bin/python python/simulate.py \
   --btc-address YOUR_VALIDATED_ADDRESS --principal 1
@@ -217,7 +220,7 @@ by updating repository files.
 
 Keep the services' separate SQLite databases when restarting after an RPC error.
 The README describes recovery, dataset requirements, report regeneration and
-submission packaging. The current workflow has passed on an isolated Geth
-instance with the course genesis and valid Bitcoin data; prepare the final
-course ZIP with the verified sources and report.
+submission packaging. Historical Geth verification records the tested version
+and course genesis in \texttt{docs/geth-demo.json}; prepare the final course ZIP
+with source, tests and this report.
 \end{document}

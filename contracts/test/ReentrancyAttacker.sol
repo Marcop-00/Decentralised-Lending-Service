@@ -8,6 +8,7 @@ interface IWithdrawablePool {
 
 /// @title ReentrancyAttacker
 /// @notice Test attacker used unchanged against the safe and vulnerable pools.
+/// @dev Demonstration only; the service setup never deploys this contract.
 contract ReentrancyAttacker {
     IWithdrawablePool public immutable victim;
     uint256 public withdrawalAmount;

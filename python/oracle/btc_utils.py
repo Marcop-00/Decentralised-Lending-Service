@@ -299,8 +299,8 @@ def parse_blocks(
     or corrupt source data raises BlockDataError instead of a partial result.
 
     `blk_dat_path` may be a directory of blk*.dat files or a single .dat
-    file. The single-file form is used by test_btc_utils.py to verify the
-    genesis block in isolation.
+    file. Offline parser tests can use either form to verify a small chain
+    starting at the mainnet genesis block.
     """
     if max_blocks <= 0:
         raise ValueError("max_blocks must be positive")
