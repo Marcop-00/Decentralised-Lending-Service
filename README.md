@@ -50,6 +50,54 @@ gas table. Figures depend on hardfork, storage and contributor count.
 Coverage runs exercise the same scenarios without overwriting gas measurements
 with costs from instrumented bytecode. HTML coverage is saved in coverage/html.
 
+### Read the results
+
+All commands above run from the project root. After setup, tests need no running
+Geth, oracle or voter, no service .env files, no keys and no real Bitcoin dataset.
+Installation and uncached compiler downloads need internet access. Do not run
+python/setup.py just to test: that script deploys a separate service on Geth.
+The tests do not change balances or deployments on your existing private chain.
+
+- `npm run typecheck`: contract build and TypeScript checks; successful exit with
+  no errors. The type checker may finish silently.
+- `npm test`: **34 passing**, comprising 4 native Solidity tests and 30
+  Node.js/TypeScript tests in this version. One Solidity fuzz test uses 256
+  generated inputs; these are not 256 additional tests. This run also includes
+  gas profiling and rewrites docs/gas-measurements.json.
+- Python unittest discovery: **Ran 49 tests**, then **OK**. Miniature temporary
+  datasets and mocked services cover parsing, UTXOs, event recovery, voting,
+  setup safeguards and demo accounting; they do not validate your real dataset.
+- `npm run test:gas`: **1 passing** profiling test covering **20 scenarios**.
+  Values are receipt gasUsed units, not ETH or the transaction gas limit.
+- `npm run test:coverage`: **34 passing**, then line/statement coverage.
+  Open coverage/html/index.html in a browser; this is contract coverage, not
+  Python coverage. Coverage is not proof of correctness or security.
+
+A test can pass by checking that an invalid transaction reverts. The reentrancy
+test passes only if the deliberately vulnerable pool is drained and the normal
+pool protects the honest contributor. Read the final summary: failed assertions,
+FAIL/ERROR or a nonzero exit status indicate a problem. Counts refer to this
+version and change if tests are added.
+
+### Run a focused check
+
+    npm test -- test/advanced_behaviors.test.ts
+    npm test -- test/events_and_isolation.test.ts
+    npm test -- test/reentrancy.test.ts
+    npm test -- test/upgrade.test.ts
+    npm test -- contracts/test/LoanContract.t.sol
+    ./.venv/bin/python -m unittest discover -s python/tests -p 'test_demo_scenarios.py' -v
+
+Choose the relevant command: these check default/refund/interest accounting,
+event emitters/arguments and loan independence, reentrancy, upgrades, native loan
+rules and six offline demo checks respectively. The event check covers the pool
+proxy, oracle and loan contracts, including a compensation retry that must not
+emit another default. The isolation check uses two borrowers and verifies that
+repaying either loan leaves the other loan's terms, repayments and positions unchanged.
+If a test fails, rerun its file and inspect the first failed assertion. Do not
+delete private-chain data, keys or event queues to troubleshoot isolated tests.
+Page 4 of the report contains the step-by-step testing guide.
+
 ## Validate Bitcoin data before the real demo
 
 Supply decoded mainnet blk*.dat records containing the continuous chain from
@@ -111,7 +159,12 @@ recovered. It is separate from the in-memory Bitcoin index.
 
 Select an address with sufficient capacity from the validated data summary:
 
-    ./.venv/bin/python python/simulate.py --btc-address YOUR_VALIDATED_ADDRESS --principal 1
+    ./.venv/bin/python python/simulate.py --btc-address 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa --principal 1
+
+This concrete address has 4,000,000 satoshi in the validated project snapshot,
+enough for the default 1 ETH request at the fixed exchange rate. If your input
+differs, use an address from your own validated summary with sufficient capacity;
+do not pass a literal placeholder such as `YOUR_VALIDATED_ADDRESS`.
 
 BTC_ADDRESS can alternatively be set in the demo environment. The demo waits for
 a fresh oracle event, checks actual liquidity and contributes enough capital.
@@ -250,7 +303,10 @@ plain-language explanations, worked examples, numbered excerpts loaded directly
 from the real source files, and questions/model answers for a code-reading oral exam.
 The LaTeX source includes excerpts by line range; recheck those ranges if code moves.
 To regenerate it, run `latexmk -pdf -interaction=nonstopmode -halt-on-error guida-orale.tex`
-from docs/. The submission report remains five pages.
+from docs/. The current report has five pages: architecture/protocol, gas/security,
+the service user manual, the testing guide, and an observed-run walk-through with
+final accounting. Its compact layout meets the assignment's five-page report
+limit; the separate oral-exam study guide remains complete and unchanged.
 
 The Geth demo recorded in docs/geth-demo.json verifies the 11 October 2026 sources
 and Bitcoin data; its source hashes identify that specific run.
@@ -264,6 +320,6 @@ and 16 final-state checks. It confirms repayment, default, partial compensation
 and a zero-reserve retry for the selected source hashes. The existing local chain
 and service environments were not modified by that verification.
 Before submission, prepare the course ZIP with source, tests, configuration,
-lockfile, scripts and the report
-(maximum five pages). Omit node_modules, .venv, .env, event databases and regenerable
+lockfile, scripts and the report.
+Omit node_modules, .venv, .env, event databases and regenerable
 Ethereum data. Make the exact Bitcoin snapshot available according to course rules.

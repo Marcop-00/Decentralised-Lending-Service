@@ -4,282 +4,147 @@
 \usepackage[default]{sourcesanspro}
 \usepackage{amsmath,microtype,graphicx,booktabs,tabularx,array,enumitem}
 \usepackage[table]{xcolor}
-\usepackage{geometry,fancyhdr,lastpage,tikz,tcolorbox,listings,hyperref}
-\usetikzlibrary{arrows.meta,positioning}
-\tcbuselibrary{skins,listings}
-\geometry{left=17mm,right=17mm,top=14mm,bottom=13mm,
-  headheight=20pt,headsep=5mm,footskip=9mm,includeheadfoot}
-
-\definecolor{Navy}{HTML}{16334A}
-\definecolor{Teal}{HTML}{147D83}
-\definecolor{Ink}{HTML}{253947}
-\definecolor{Muted}{HTML}{60717D}
-\definecolor{Mist}{HTML}{EEF4F7}
-\definecolor{Rule}{HTML}{D5E1E7}
-\definecolor{Warm}{HTML}{A35E28}
-\definecolor{Sand}{HTML}{FAF3E9}
-\color{Ink}
+\usepackage{geometry,fancyhdr,lastpage,listings,hyperref}
+\geometry{left=17mm,right=17mm,top=13mm,bottom=13mm,
+  headheight=18pt,headsep=4mm,footskip=8mm,includeheadfoot}
+\definecolor{Navy}{HTML}{203446}
+\definecolor{Muted}{HTML}{58636C}
+\definecolor{Mist}{HTML}{F3F4F5}
+\definecolor{Rule}{HTML}{C8CDD1}
+\color{black}
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{3pt}
-\linespread{1.06}
-\setlist[itemize]{leftmargin=4mm,itemsep=2pt,topsep=3pt,parsep=0pt}
+\setlength{\emergencystretch}{1.5em}
+\linespread{1.04}
+\setlist[itemize]{leftmargin=4mm,itemsep=1pt,topsep=2pt,parsep=0pt}
 \setlength{\tabcolsep}{5pt}
-\renewcommand{\arraystretch}{1.15}
-\hypersetup{colorlinks=true,linkcolor=Teal,urlcolor=Teal,
+\renewcommand{\arraystretch}{1.12}
+\hypersetup{colorlinks=true,linkcolor=Navy,urlcolor=Navy,
   pdftitle={Decentralised Lending Service - Project Report},
   pdfauthor={Marco Pernisco},pdfsubject={P2P Systems and Blockchains Lab 2025/26}}
-
-\pagestyle{fancy}
-\fancyhf{}
+\pagestyle{fancy}\fancyhf{}
 \fancyhead[L]{\fontsize{8}{10}\selectfont\color{Muted}DECENTRALISED LENDING SERVICE}
 \fancyhead[R]{\fontsize{8}{10}\selectfont\color{Muted}PROJECT REPORT / TRACE 1.1}
-\fancyfoot[L]{\fontsize{8}{10}\selectfont\color{Muted}Marco Pernisco\quad /\quad 683674}
+\fancyfoot[L]{\fontsize{8}{10}\selectfont\color{Muted}Marco Pernisco / 683674}
 \fancyfoot[R]{\fontsize{8}{10}\selectfont\color{Muted}\thepage\ /\ \pageref*{LastPage}}
 \renewcommand{\headrulewidth}{0.3pt}
-\renewcommand{\headrule}{\hbox to\headwidth{\color{Rule}\leaders\hrule height \headrulewidth\hfill}}
-
-\newcommand{\entity}[1]{{\color{Navy}\texttt{#1}}}
-\newcommand{\py}[1]{{\color{Teal}\texttt{#1}}}
-\newcommand{\kicker}[1]{{\fontsize{8.5}{11}\selectfont\bfseries\color{Teal}#1}\par}
-\newcommand{\pagetitle}[3]{\kicker{#1}\vspace{1mm}
-  {\fontsize{24}{27}\selectfont\bfseries\color{Navy}#2\par}
-  \vspace{1mm}{\color{Muted}#3\par}\vspace{3mm}}
-\newcommand{\subhead}[1]{\par\vspace{2mm}{\fontsize{12}{15}\selectfont\bfseries\color{Navy}#1\par}\vspace{0.5mm}}
-\tcbset{panel/.style={enhanced,sharp corners,boxrule=0.4pt,colframe=Rule,
-  colback=Mist,left=3mm,right=3mm,top=2mm,bottom=2mm,before skip=4pt,after skip=4pt}}
-\newtcolorbox{notebox}{panel,borderline west={1.5pt}{0pt}{Teal}}
-\newtcolorbox{rolebox}[1]{panel,height=29mm,fontupper=\small\raggedright,
-  title=#1,colbacktitle=Mist,coltitle=Navy,fonttitle=\bfseries,
-  titlerule=0pt,top=1mm,bottom=1.5mm}
-\newtcolorbox{statbox}{panel,height=20mm,halign=center,top=1.5mm,bottom=1.5mm}
-\newtcblisting{codeblock}{panel,listing only,colback=Mist,boxrule=0pt,
-  borderline west={1.5pt}{0pt}{Teal},left=3mm,right=2mm,top=1.5mm,bottom=1.5mm,
-  listing options={basicstyle=\ttfamily\fontsize{8.6}{10.8}\selectfont,
-    aboveskip=0pt,belowskip=0pt,columns=fullflexible,keepspaces=true,
-    breaklines=true,showstringspaces=false}}
+\newcommand{\entity}[1]{{\small\texttt{#1}}}
+\newcommand{\pagetitle}[1]{{\fontsize{17}{20}\selectfont\bfseries\color{Navy}#1\par}\vspace{2mm}}
+\newcommand{\subhead}[1]{\par\addvspace{2mm}{\fontsize{11.5}{14}\selectfont\bfseries\color{Navy}#1\par}\vspace{0.3mm}}
+\lstnewenvironment{codeblock}{\lstset{
+  basicstyle=\ttfamily\fontsize{9}{10.7}\selectfont,
+  backgroundcolor=\color{Mist},frame=l,rulecolor=\color{Rule},framerule=0.5pt,
+  xleftmargin=3mm,xrightmargin=1mm,framexleftmargin=1.5mm,framesep=1.5mm,
+  aboveskip=4pt,belowskip=4pt,columns=fullflexible,keepspaces=true,
+  breaklines=true,showstringspaces=false}}{}
 
 \begin{document}
-\kicker{01 / SYSTEM MAP}
-\begin{minipage}[c]{0.79\linewidth}
-  {\fontsize{23}{26}\selectfont\bfseries\color{Navy}Decentralised Lending Service\par}
-  \vspace{2mm}Marco Pernisco\quad\textcolor{Muted}{Student ID: 683674}\par
-  {\small\color{Muted}P2P Systems and Blockchains Lab 2025/26 / Trace 1.1}
-\end{minipage}\hfill
-\begin{minipage}[c]{0.18\linewidth}
-  \raggedleft\includegraphics[width=\linewidth]{pisa_logo.png}
-\end{minipage}
-\vspace{2mm}
-
-Contributors pool ETH and decide which loans to fund. A trusted oracle records
-historical Bitcoin liquidity; each approved loan receives its own contract.
-
-\subhead{Actors and responsibilities}
-\begin{minipage}[t]{0.323\linewidth}
-\begin{rolebox}{CONTRIBUTOR}
-Deposits and withdraws ETH; votes; claims interest and compensation. The same
-user may also be an applicant.
-\end{rolebox}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.323\linewidth}
-\begin{rolebox}{APPLICANT / BORROWER}
-Proposes loan terms and a BTC address; resolves the proposal; receives ETH
-and repays the loan.
-\end{rolebox}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.323\linewidth}
-\begin{rolebox}{OWNER / ORACLE OPERATOR}
-The pool owner controls upgrades and termination. The trusted oracle operator
-publishes Bitcoin balances.
-\end{rolebox}
-\end{minipage}
-
-\subhead{Contracts and off-chain services}
-\begin{center}
-\begin{tikzpicture}[x=1mm,y=1mm,
-  chain/.style={draw=Rule,fill=Mist,rounded corners=1mm,minimum height=21mm,
-    align=center,text width=43mm,inner sep=2mm,font=\small},
-  offchain/.style={chain,draw=Teal!40,fill=Teal!5},
-  link/.style={-{Stealth[length=2mm]},draw=Navy!75,line width=0.6pt},
-  flow/.style={-{Stealth[length=2mm]},draw=Teal,line width=0.6pt},
-  edge label/.style={font=\fontsize{8}{10}\selectfont,text=Muted,fill=white,inner sep=1mm}]
-\node[chain] (pool) at (0,0) {\textbf{ETHEREUM / POOL}\\
-  \entity{FundingPoolProxy}\\\entity{FundingPool} (UUPS logic)};
-\node[chain,text width=36mm] (loan) at (58,0) {\textbf{ETHEREUM / LOAN}\\
-  \entity{LoanContract}\\One contract per loan};
-\node[chain,text width=39mm] (oracle) at (116,0) {\textbf{ETHEREUM / ORACLE}\\
-  \entity{BitcoinOracle}\\Paid requests; satoshi balances};
-\node[offchain] (voter) at (0,-38) {\textbf{PYTHON / AUTO-VOTER}\\
-  \py{auto\_voter.py}\\Always votes YES};
-\node[offchain,text width=36mm] (bitcoin) at (58,-38) {\textbf{BITCOIN INPUT}\\
-  First 131,000 blocks\\Mainnet history};
-\node[offchain,text width=39mm] (service) at (116,-38) {\textbf{PYTHON / ORACLE}\\
-  \py{oracle\_service.py}\\In-memory UTXO index};
-\draw[link] (pool.east) -- node[edge label,above]{creates} (loan.west);
-\draw[link] (oracle.north) -- ++(0,8) -| (pool.north);
-\node[edge label] at (58,18.5) {liquidity read at resolution};
-\draw[flow] (voter.north) -- node[edge label,right]{YES vote} (pool.south);
-\draw[flow] (bitcoin.east) -- node[edge label,above]{blocks} (service.west);
-\draw[flow] (service.north) -- node[edge label,right]{update} (oracle.south);
-\end{tikzpicture}
-\end{center}
-
-\subhead{Separate balances inside the pool}
-{\small
-\begin{tabularx}{\linewidth}{@{}>{\bfseries\color{Navy}}p{34mm}X@{}}
-\toprule
-Funding pool & Contributor capital: disposable ETH can be withdrawn or loaned;
-locked positions back outstanding loans.\\
-Compensation pool & Reserve funded by collateral portions of interest, surplus
-repayments and rounding dust; used to compensate failed loans.\\
-Claimable interest & Contributor gains tracked separately from deposits; paid
-through \entity{claimInterestGain()}. Not loanable capital.\\
-\bottomrule
-\end{tabularx}}
-
-\begin{notebox}\small
-\textbf{Didactic trust model.} BTC ownership is not proved and BTC are not locked.
-The pool reads the stored balance at a fixed rate of \textbf{1 BTC = 30 ETH}.
-The proxy holds ETH and state; the implementation supplies executable logic.
-\end{notebox}
-
-\newpage
-\pagetitle{02 / PROTOCOL}{Lifecycle \& accounting}{Rules applied by the pool and each dedicated loan contract.}
-
-\subhead{1. Proposal, voting and resolution}
-\textbf{Contributor.} Deposits must exceed \textbf{100,000 wei}. A contributor
-retains voting eligibility even when all capital is locked. Each vote is YES or NO;
-abstentions count as NO. At resolution, the pool recomputes weights using each
-contributor's \emph{current disposable balance}; ties reject.
-
-\textbf{Applicant.} Specifies principal, interest rate (1--100), duration in blocks
-and a Bitcoin address. Only the original applicant resolves the proposal, after
-at least \textbf{12 blocks}. Voting stays open until resolution.
-The ABI field \entity{votingDeadlineBlock} denotes the earliest resolution block.
-
-\textbf{FundingPool.} Insufficient disposable ETH or BTC liquidity rejects and
-closes the proposal. Approval also closes voting and creates a new
-\entity{LoanContract}. All time periods use block-height differences.
-
-\subhead{2. Proportional allocation and loan terms}
-The pool locks each contributor's proportional share of current disposable funds.
-Integer-division remainders reduce the \textbf{actual disbursed principal}; they
-are not assigned to an arbitrary participant. The loan snapshots the current
-collateral percentage, which remains fixed for that loan.
-
-\subhead{3. Installments, principal refunds and interest}
-Only the original borrower may repay an active or failed loan. Each installment
-contains both principal and interest. With principal $P$, rate $r$, total interest
-$I=\lfloor Pr/100\rfloor$ and cumulative accepted payment $C\leq P+I$:
-\begin{notebox}
-\setlength{\abovedisplayskip}{3pt}
-\setlength{\belowdisplayskip}{5pt}
-\[
-\underbrace{B(C)=\left\lfloor\frac{CP}{P+I}\right\rfloor}_{\text{cumulative principal}},
-\qquad
-\underbrace{J(C)=C-B(C)}_{\text{cumulative interest}}.
-\]
-\small Each installment applies the change in these targets. Collateral uses
-changes in $\lfloor Jc/100\rfloor$, so splitting a payment preserves the
-cumulative principal/interest and collateral rounding totals.
-\end{notebox}
-
-\begin{itemize}
-\item \textbf{Principal:} refunds positions from highest to lowest \emph{initial}
-loan share, breaking ties by descending numerical address. Merge sort computes
-the order once; pre-upgrade loans without an order are prepared lazily.
-\item \textbf{Interest:} collateral enters the compensation pool; gains are
-credited separately in proportion to original loan shares and withdrawn using
-\entity{claimInterestGain()}. Distribution dust also enters compensation.
-\item \textbf{Overpayment:} any amount beyond the entire principal-plus-interest
-debt enters compensation. A single installment may repay the whole debt.
-\end{itemize}
-
-\subhead{4. Success, default and compensation}
-\begin{minipage}[t]{0.488\linewidth}
-\begin{notebox}\small
-{\bfseries\color{Teal}FUNDED $\rightarrow$ REPAID}\par
-Full repayment by the due block is successful. Global collateral decreases by
-five points. The loan closes; recovered capital becomes disposable again.
-\end{notebox}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.488\linewidth}
-\begin{tcolorbox}[panel,colback=Sand,borderline west={1.5pt}{0pt}{Warm}]\small
-{\bfseries\color{Warm}OVERDUE $\rightarrow$ DEFAULTED}\par
-Late repayment or a valid default/compensation request records failure once.
-Global collateral increases by five points. Later repayment cannot reverse it.
-\end{tcolorbox}
-\end{minipage}
-
-Collateral starts at \textbf{50\%} and is bounded to \textbf{1--100\%}. Compensation
-covers unpaid principal only, up to the available reserve. A valid request with
-an empty reserve records default but pays zero; the claim remains for later
-refills. Compensation forfeits the same amount of future principal recovery,
-while original interest weights remain unchanged.
-
-\begin{notebox}\small
-\textbf{Lifecycle control.} Only the owner may upgrade the pool or terminate it
-when no active loans remain. Termination preserves recovery operations. Existing
-loan contracts keep their original bytecode after an upgrade. The installment
-split, minimum voting period and empty-reserve behavior are documented
-interpretations of the trace's less explicit wording.
-\end{notebox}
-
-\newpage
-\pagetitle{03 / VERIFICATION}{Tests \& gas evaluation}{Measured transaction costs, with reproducible build settings.}
-
-\begin{minipage}[t]{0.323\linewidth}\begin{statbox}
-{\fontsize{22}{23}\selectfont\bfseries\color{Navy}32}\par
-{\fontsize{8.5}{11}\selectfont Contract tests passed\\4 Solidity + 28 TypeScript}
-\end{statbox}\end{minipage}\hfill
-\begin{minipage}[t]{0.323\linewidth}\begin{statbox}
-{\fontsize{22}{23}\selectfont\bfseries\color{Teal}49}\par
-{\fontsize{8.5}{11}\selectfont Offline Python tests passed\\No real keys or RPC}
-\end{statbox}\end{minipage}\hfill
-\begin{minipage}[t]{0.323\linewidth}\begin{statbox}
-{\fontsize{22}{23}\selectfont\bfseries\color{Navy}20}\par
-{\fontsize{8.5}{11}\selectfont Operation scenarios profiled\\Measured receipt gasUsed}
-\end{statbox}\end{minipage}
-
+\begingroup
+\centering
+\setlength{\parskip}{1pt}
+\includegraphics[width=36mm]{pisa_logo.png}\par
 \vspace{1mm}
-\textbf{Environment.} Hardhat 3.18.1; TypeScript 6.0.3; \entity{node:test}; viem
-2.57.3. Solidity 0.8.24, optimizer 200 runs and EVM \textbf{Berlin}; simulated
-chain ID 202526, matching the supplied genesis.
+{\fontsize{20}{23}\selectfont\bfseries\color{Navy}Decentralised Lending Service\par}
+\vspace{0.5mm}
+{\small Marco Pernisco / Student ID 683674\quad
+\textcolor{Muted}{P2P Systems and Blockchains Lab 2025/26 / Trace 1.1}\par}
+\endgroup
+\vspace{1mm}
+\subhead{1. Architecture and protocol}
+The service pools contributors' ETH and lets them vote on loans. A
+\textbf{contributor} deposits, votes, withdraws disposable capital and claims
+interest or compensation. An \textbf{applicant} proposes terms, resolves the
+proposal and, if funded, receives and repays ETH. One account may hold both roles.
 
-\subhead{Operation costs by responsible contract}
+\textbf{On-chain design.} \entity{FundingPoolProxy} holds ETH and state;
+\entity{FundingPool} supplies UUPS logic. Only the owner may upgrade it; tests
+check state preservation. Each approved loan deploys a separate
+\entity{LoanContract} with its own borrower, terms and repayment state.
+Existing loan bytecode does not change when the pool is upgraded.
+\entity{BitcoinOracle} stores satoshi balances and emits paid update requests.
+The pool reads its stored balance during proposal resolution.
+
+\textbf{Off-chain design.} The trusted Python oracle processes the first
+\textbf{131,000 Bitcoin mainnet blocks}, one block at a time, rebuilding the
+UTXO index \textbf{in memory}. It then answers Ethereum update requests.
+Restarting repeats the scan: no Bitcoin balance/UTXO cache is stored on disk.
+The separate voter detects proposal events and always votes YES, even with
+fully locked capital. SQLite persists service events and signed transactions,
+not Bitcoin balances; retries survive temporary RPC failures.
+
+\textbf{Trust model.} BTC ownership is not proved and BTC are not locked.
+Historical liquidity uses the fixed rate \textbf{1 BTC = 30 ETH}; this is the
+trace's didactic simplification, not a live price or enforceable Bitcoin guarantee.
+The parser checks connected blocks, hashes and Merkle roots, excludes the
+unspendable genesis reward and refuses incomplete input; it is not a full
+Bitcoin consensus node.
+
+\subhead{Voting and funding}
+Deposits must exceed \textbf{100,000 wei}. Voting eligibility includes locked
+capital, but resolution weights each contributor's \textbf{current disposable
+balance}; nonvoters count as NO and ties reject. Only the original applicant
+may resolve, after at least \textbf{12 blocks}. Voting remains open until
+resolution; \entity{votingDeadlineBlock} names the earliest resolution block.
+All durations are block-height differences. Applicants specify principal,
+interest rate (1--100), duration and a BTC address.
+
+Insufficient disposable ETH or Bitcoin liquidity rejects and closes the
+proposal. Approval closes voting and locks capital proportionally across
+contributors. Integer-division remainders reduce the \textbf{actual disbursed
+principal}; no arbitrary participant receives the difference. The loan fixes
+its collateral percentage at creation.
+
+\subhead{Repayment, interest and compensation}
+Capital is either \textbf{disposable} or \textbf{locked}; claimable interest and
+the compensation reserve are separate, non-loanable balances. Only the original
+borrower may repay, including after default. Each installment covers principal
+and interest in proportion to the total debt; one payment may repay everything.
+
+\textbf{Principal refunds} unlock contributor capital in the pool, not directly
+in their wallets. Refunds follow descending \emph{initial} loan shares, with
+ties broken by descending numerical address. The order is sorted once.
+\textbf{Interest} is split using the loan's fixed collateral percentage:
+collateral enters the reserve; the rest becomes contributor gains proportional
+to initial shares, collected through \entity{claimInterestGain()}.
+Cumulative payment calculations preserve principal, interest and collateral
+rounding across installments. Surplus above the full debt and interest
+distribution dust enter the reserve. Page 5 gives a numerical example.
+
+\textbf{Success/default.} Full repayment by the due block succeeds; an overdue,
+unpaid loan is marked failed by a transaction, not by time passing alone.
+Failure is counted once and cannot be reversed by late repayment. Global
+collateral starts at \textbf{50\%}, stays within \textbf{1--100\%}, decreases
+five points per success and increases five per failure; existing loans keep
+their original percentages.
+
+\textbf{Compensation} covers unpaid principal only, capped by the reserve.
+An empty-reserve request still records default, pays zero and preserves the
+claim for future refills. Actual compensation forfeits the same amount of
+future principal recovery without changing original interest weights.
+Only the owner may \textbf{terminate} the service, with no active loans;
+withdrawal, interest claims and recovery remain available. The installment
+split, minimum voting period and zero-reserve behavior are documented
+interpretations of the trace's less explicit wording.
+
+\newpage
+\pagetitle{2. Gas evaluation and security}
+\textbf{Environment.} Hardhat 3.18.1, TypeScript 6.0.3, \entity{node:test},
+viem 2.57.3; Solidity 0.8.24, optimizer 200 runs, EVM/hardfork
+\textbf{Berlin}, simulated chain ID 202526. \textbf{20 scenarios} measure
+receipt \entity{gasUsed}, including intrinsic gas, with one contributor.
+
 \input{gas-table.tex}
 
-{\small\color{Muted}Source: \entity{docs/gas-measurements.json}, generated from
-transaction receipts including intrinsic gas. One-contributor scenario with
-separate partial/final repayments. Values are gas units, not wei or universal
-upper bounds. Getters invoked with \entity{eth\_call} incur no paid transaction fee.}
+{\small Source: \entity{docs/gas-measurements.json}. Values are gas units, not
+wei or universal upper bounds; costs depend on storage and contributor count.
+Getters called through \entity{eth\_call} incur no paid transaction fee.
+\textbf{Oracle fee:} $49,426\times0.1\text{ gwei}=4,942,600,000,000$ wei.
+Calibration uses a first nonzero update of a 34-character historical address;
+existing-slot updates cost less. Bytecode/settings changes require recalibration.\par}
 
-\begin{notebox}\small
-\textbf{Oracle update fee.}\quad
-$49,426\times0.1\text{ gwei}=\mathbf{4,942,600,000,000\text{ wei}}$.\par
-Calibration uses a first nonzero update of a 34-character historical address.
-Existing-slot updates cost less. Compiler, bytecode or scenario changes require
-recalibration.
-\end{notebox}
-
-\subhead{What the checks cover}
-\textbf{Protocol:} voting boundaries, allocation dust, installments, defaults,
-compensation retries, termination, access, upgrades and reentrancy. Native
-Solidity fuzzing checks repayment conservation with \textbf{256 generated cases}.
-
-\textbf{Python:} genesis exclusion, invalid/incomplete data, atomic UTXO indexing,
-event recovery, retries, receipt failures and fresh oracle events. TypeScript
-strict checks also pass. \entity{npm run test:gas} reproduces profiling;
-\entity{npm run test:coverage} instruments tests without overwriting gas measurements.
-
-\newpage
-\pagetitle{04 / SECURITY}{Attacks \& operational limits}{Required adversarial demonstration and explicit trust assumptions.}
-
-\subhead{Reentrancy: intentionally changing the real pool}
-The test-only \entity{FundingPoolVulnerable} inherits \entity{FundingPool} and
-changes withdrawal: it caches the position, transfers ETH first, then writes
-stale balances. \entity{ReentrancyAttacker} recursively calls
-\entity{withdraw(amount)} from its receive function.
-
+\subhead{Reentrancy: modification and executable attack}
+The test-only \entity{FundingPoolVulnerable} inherits the real pool and replaces
+withdrawal with stale balance writes \textbf{after} the external transfer:
 \begin{codeblock}
 uint256 beforePosition = totalContributed[msg.sender];
 uint256 beforePool = totalUnlockedFunds;
@@ -288,130 +153,248 @@ if (!sent) revert TransferFailed();
 totalContributed[msg.sender] = beforePosition - amount;
 totalUnlockedFunds = beforePool - amount;
 \end{codeblock}
-
-\begin{minipage}[t]{0.488\linewidth}
-\begin{tcolorbox}[panel,colback=Sand,borderline west={1.5pt}{0pt}{Warm}]\small
-{\bfseries\color{Warm}VULNERABLE VARIANT}\par
-The same claim remains available during reentry. A 1 ETH attacker deposit can
-drain the other contributor's 10 ETH. The test observes an empty victim pool.
-\end{tcolorbox}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.488\linewidth}
-\begin{notebox}\small
-{\bfseries\color{Teal}NORMAL FUNDING POOL}\par
-Accounting changes before the external call. Reentry fails while the legitimate
-withdrawal finishes. The honest contributor's 10 ETH remain in the pool.
-\end{notebox}
-\end{minipage}
-
-The same attacker is tested against both proxies. Simply moving a checked live
-subtraction after the transfer might underflow and revert in Solidity 0.8;
-stale assignments make this modified example actually exploitable. Test variants
-live in \entity{contracts/test/} and are never deployed by the service setup.
-These checks do not constitute a general security proof.
+\entity{ReentrancyAttacker} recursively calls \entity{withdraw(amount)} from
+its receive function. In \entity{test/reentrancy.test.ts}, a 1 ETH attacker
+deposit drains the honest contributor's 10 ETH from the vulnerable proxy;
+the same attacker cannot steal those 10 ETH from the normal proxy, whose
+accounting changes before transfer. Simply subtracting from a live balance
+after transfer could revert on underflow in Solidity 0.8; stale assignments
+make the modified example actually exploitable. Test variants are never deployed
+by service setup. These checks are not a general security proof.
 
 \subhead{Unfair remuneration without reentrancy}
-\begin{notebox}
-\textbf{Majority contributor: 6 ETH}\quad +\quad
-\textbf{honest minority: 4 ETH}\quad $\rightarrow$\quad \textbf{10 ETH loan}
-\end{notebox}
-The majority contributor can approve a loan to a colluding borrower and default.
-The attacker moves 6 ETH of its own capital but captures the minority's 4 ETH:
-the net gain is \textbf{4 ETH}, not the full loan. Any sufficiently funded BTC
-address can be cited because the trace requires no ownership proof. Priority
-refunds also favor large initial positions: with backing 6/4, a base repayment
-of 6 restores the whale's position before the smaller contributor recovers any
-principal. These are consequences of the specified economic rules.
+A majority contributor with \textbf{6 ETH} can approve a \textbf{10 ETH} loan
+to a colluding borrower, backed also by an honest contributor's \textbf{4 ETH},
+then default. The colluding group captures a net \textbf{4 ETH}, not 10 ETH,
+before gas and other flows. Any sufficiently funded BTC address can be cited
+because ownership is not proved. Priority refunds also favor large positions:
+with backing 6/4, a base repayment of 6 restores the larger position before
+the smaller contributor recovers principal. These follow the specified
+economic rules, rather than a reentrancy flaw.
 
-\subhead{Boundaries of the implementation}
-\begin{itemize}
-\item \textbf{Bitcoin oracle.} Applies blocks in chain order and checks payload
-hashes/Merkle roots, but trusts historical input rather than implementing full
-Bitcoin consensus. It excludes the unspendable genesis reward and publishes
-nothing after failed/incomplete synchronization.
-\item \textbf{Service reliability.} SQLite persists requests and signed
-transactions before advancing/broadcasting. Services retry temporary failures;
-checkpoints detect chain replacement and nonce conflicts remain inspectable.
-The target is a single-node private chain, without automatic reorganization recovery.
-\item \textbf{Scale and upgrades.} Empty contributor positions are removed and
-refund order is sorted once. Work still grows with contributor count and must
-fit the block gas limit. V2 tests preserve ownership, state and active positions;
-previously created loan contracts remain immutable.
-\end{itemize}
-
-\begin{notebox}\small
-\textbf{Integration verification / 5 November 2026.} An isolated Geth 1.13.14 chain
-used the course genesis, 10-second Clique blocks and a real 131,000-block Bitcoin
-replay. All 20 receipts succeeded; 16 final checks passed. A 1 ETH loan at 5\%
-was repaid in two 0.525 ETH installments, producing 0.025 ETH each in gain and
-reserve. A second 0.5 ETH loan defaulted: compensation paid 0.025 ETH, then zero
-on retry, preserving the remaining 0.475 ETH claim. Selected source hashes and
-final state are in \entity{docs/default-demo-verification.json}. Earlier evidence
-in \entity{docs/bitcoin-validation.json} and \entity{docs/geth-demo.json} remains
-explicitly historical; the user's existing chain and environments were untouched.
-\end{notebox}
+\textbf{Limits.} Empty positions are removed, but work scales with contributors
+and must fit block gas limits. Checkpoints detect chain replacement; nonce
+conflicts remain inspectable. Reorganization recovery is not automatic.
 
 \newpage
-\pagetitle{05 / USER MANUAL}{Run the project}{Successful repayment, then default and compensation on the private chain.}
+\pagetitle{3. Run the service}
+Run commands from the \textbf{project root}, unless indicated otherwise.
+Use a supported even-numbered Node release (22.13.0+), Python 3.10+ and
+\textbf{Geth 1.13.14}, the pre-PoS Clique client matching the course genesis.
 
-\subhead{1. Install and validate Bitcoin input}
-Use a supported even-numbered Node release (22.13.0+), Python 3.10+ and Geth
-\textbf{1.13.14} for the supplied Clique genesis. Run from the project root:
+\subhead{1. Install dependencies and validate Bitcoin data}
 \begin{codeblock}
 ./setup.sh
 ./.venv/bin/python python/oracle/check_data.py --data-dir bitcoin --summary
 \end{codeblock}
-\entity{setup.sh} installs dependencies and Geth, creates the Python environment
-and compiles; deployment is separate. Supply decoded mainnet \entity{blk*.dat}.
-The checker must report \entity{valid: true}, 131,000 blocks and height 130,999;
-it lists funded addresses without needing keys or an Ethereum connection.
+Setup installs locked Node dependencies and Python packages, creates
+\entity{.venv}, compiles contracts and obtains Geth. Installation and uncached
+compiler downloads need internet access; skip setup if already completed.
+Supply decoded mainnet \entity{blk*.dat} files containing genesis through
+height 130,999. The offline checker needs no keys or Geth: success reports
+\entity{valid: true}, \textbf{131,000 blocks} and height \textbf{130,999}, and
+lists funded addresses. Missing/incomplete data must not be replaced by fake balances.
 
-\subhead{2. Start the private chain / terminal 1}
+\subhead{2. Start the course private chain / terminal 1}
 \begin{codeblock}
 cd private-chain
 ./geth --datadir=./data init project2526genesis.json
 ./geth --datadir=./data --keystore=./keystore --networkid=202526 \
   --http --http.addr=127.0.0.1 --http.port=8545 --http.api=eth,net,web3 \
-  --mine --miner.gasprice=100000000 --miner.etherbase=d278d247a52c550508ea2b2c9321d816238fb523 \
+  --mine --miner.gasprice=100000000 \
+  --miner.etherbase=d278d247a52c550508ea2b2c9321d816238fb523 \
   --unlock d278d247a52c550508ea2b2c9321d816238fb523 \
   --password password.txt --allow-insecure-unlock --ipcdisable
 \end{codeblock}
+Keep the node running. The exposed RPC is local; insecure account unlocking
+is for this private laboratory chain, not a public deployment.
 
-\subhead{3. Deploy the service / terminal 2, project root}
+\subhead{3. Create accounts and deploy / terminal 2, project root}
 \begin{codeblock}
 ./.venv/bin/python python/setup.py
 \end{codeblock}
-The prefunded account \textbf{only transfers ETH} to new accounts. A new deployer
-creates the oracle, implementation and initialized proxy. Setup rebuilds bytecode,
-validates the chain and deployment, then writes service environments including
-\entity{DEPLOYMENT\_BLOCK}. Each run creates a separate deployment.
+The provided prefunded account \textbf{only transfers ETH} to three newly
+generated accounts. A new deployer creates the oracle, implementation and
+initialized proxy. Setup rebuilds ordinary bytecode, checks chain ID, receipts,
+code and initialization, then writes protected service environments including
+\entity{DEPLOYMENT\_BLOCK}. Repeating setup creates a separate deployment.
 
-\subhead{4. Start both Python services / separate terminals}
+\subhead{4. Start the oracle and voter / separate terminals}
 \begin{codeblock}
 ./.venv/bin/python python/oracle/oracle_service.py
 ./.venv/bin/python python/voter/auto_voter.py
 \end{codeblock}
-Wait for \entity{ORACLE READY}. At each start, the oracle reconstructs its UTXO
-index \textbf{in memory}, one block at a time, over the required first 131,000
-blocks. No Bitcoin cache is stored on disk. Keep each service's SQLite event
-database when restarting after an RPC failure.
+Wait for \textbf{ORACLE READY}: the oracle must finish its initial in-memory
+Bitcoin scan. There is no fixed sleep to configure; restarting repeats the scan.
+Keep the services running during the demo. Preserve each service's SQLite event
+queue after temporary RPC failures; it is separate from Bitcoin indexing.
 
-\subhead{5. Run both loan scenarios / project root}
+\subhead{5. Run repayment and default / another terminal, project root}
 \begin{codeblock}
 ./.venv/bin/python python/simulate.py \
-  --btc-address YOUR_VALIDATED_ADDRESS --principal 1
+  --btc-address 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa --principal 1
 \end{codeblock}
-Choose an address from the validated summary. The demo checks a fresh oracle
-balance and contributes. Scenario A funds 1 ETH at 5\%, repays two 0.525 ETH
-installments and claims gain. Scenario B funds 0.5 ETH, waits beyond its three-block
-term and requests compensation, recording default. On a fresh deployment the
-reserve pays 0.025 ETH; a zero-reserve retry preserves the remaining 0.475 ETH
-claim. Receipts and compensation invariants are checked; balances, deadlines and
-loan states are printed. Both proposals wait for real YES votes and 12 blocks.
+This concrete address has \textbf{4,000,000 satoshi} in the validated snapshot,
+enough for 1 ETH at the fixed rate. With different data, choose a sufficiently
+funded address from your checker summary; do not pass a literal placeholder.
+Scenario A repays a 1 ETH loan at 5\% in two installments and claims gain.
+Scenario B leaves 0.5 ETH unpaid, requests compensation and retries with an
+empty reserve. Both proposals wait for YES votes and 12 real blocks.
+Balances, loan states and accounting checks are printed after significant changes.
 
-{\small\color{Muted}\textbf{Submission.} Include source, tests, configuration,
-lockfile, scripts and report in one ZIP. Exclude dependencies, \entity{.env},
-queues and regenerable chain data; provide Bitcoin input under course rules.
-See the README for file, test and report-build instructions. Repository edits
-alone do not upgrade an existing deployment.\par}
+\textbf{Timing and recovery.} Clique blocks take about 10 seconds: allow several
+minutes for both voting periods. \entity{--timeout} sets the maximum seconds
+\emph{per asynchronous step} (default 300). On timeout, check node and service
+logs before retrying; do not delete chain data, keys, environments or event queues.
+The expected accounting is explained on page 5; reused deployments may differ.
+
+\newpage
+\pagetitle{4. Run and interpret the tests}
+After dependency setup (page 3), run from the \textbf{project root}.
+\textbf{No Geth, oracle, voter, keys, service environments or real Bitcoin
+files are needed.} Hardhat uses isolated simulated chains; Python tests use
+temporary data and mocked external services. They do not alter the existing
+private-chain deployment. Do not run \entity{python/setup.py} just to test.
+
+\subhead{Compilation and complete test suites}
+\begin{codeblock}
+npm run typecheck
+npm test
+./.venv/bin/python -m unittest discover -s python/tests -v
+\end{codeblock}
+\textbf{Typecheck:} builds contracts and runs \entity{tsc --noEmit}; successful
+exit with no errors is sufficient, even if TypeScript prints nothing.
+\textbf{Contracts:} expect \textbf{34 passing}, comprising \textbf{4 Solidity
++ 30 Node.js/TypeScript tests}. A Solidity fuzz test uses \textbf{256 generated
+inputs}; these are repetitions of one test, not 256 extra tests.
+\textbf{Python:} expect \textbf{Ran 49 tests} and \textbf{OK}.
+
+Contract scenarios cover voting boundaries and changing balances, BTC thresholds,
+allocation dust, installments, refund order, interest, defaults, repeated
+compensation, access, termination, upgrades and reentrancy. Explicit checks
+validate event emitters/arguments and independent contracts for two borrowers.
+Python checks cover parsing, genesis exclusion, UTXOs, atomic indexing, durable
+event/transaction retries, the always-YES voter, setup safeguards and demo
+compensation. Mocked balances test contract logic, not the real Bitcoin dataset.
+
+\subhead{Select a focused check}
+\begin{codeblock}
+npm test -- test/advanced_behaviors.test.ts
+npm test -- test/events_and_isolation.test.ts
+npm test -- test/reentrancy.test.ts
+npm test -- test/upgrade.test.ts
+npm test -- contracts/test/LoanContract.t.sol
+./.venv/bin/python -m unittest discover -s python/tests \
+  -p 'test_demo_scenarios.py' -v
+\end{codeblock}
+Choose the relevant command: accounting; events and loan isolation; reentrancy;
+upgrades; native loan rules; or \textbf{six offline demo checks}. Event checks
+include a compensation retry that must not emit another default. Isolation
+checks repay two loans with different borrowers and ensure that neither changes
+the other loan's terms, repayments or contributor positions.
+
+\subhead{Reproduce gas costs and inspect coverage}
+\begin{codeblock}
+npm run test:gas
+./.venv/bin/python docs/render_gas_table.py
+npm run test:coverage
+\end{codeblock}
+\textbf{Gas:} expect \textbf{1 passing} profiling test for \textbf{20 scenarios}.
+It writes \entity{docs/gas-measurements.json}; the Python command regenerates
+\entity{docs/gas-table.tex}. Recompile the report after updating the table.
+The full \entity{npm test} run also includes profiling and rewrites the JSON.
+Costs in wei equal receipt gas used times gas price, not the submitted gas limit.
+
+\textbf{Coverage:} expect \textbf{34 passing} and line/statement percentages.
+Open \entity{coverage/html/index.html} in a browser. This is contract coverage,
+not Python coverage or proof of security. Instrumented bytecode changes gas:
+coverage deliberately leaves ordinary gas measurements unchanged. Use the
+profiling command, not coverage gas, for cost evaluation.
+
+\subhead{Recognize success and troubleshoot}
+A test may deliberately trigger a revert and still pass: it checks rejection
+of an invalid operation. The reentrancy test passes only if the unsafe variant
+is drained \emph{and} the normal pool protects honest funds. Read the final
+summary; failed assertions, \entity{FAIL}/\entity{ERROR} or a nonzero exit status
+need investigation. Counts describe this version and may change as tests are added.
+
+\textbf{Missing modules/interpreter:} check the working directory, supported Node
+version and completed \entity{./setup.sh}; use \entity{./.venv/bin/python}.
+\textbf{Failed test:} rerun its file and inspect the first expected/actual mismatch.
+Do not delete private-chain data or event queues to fix isolated tests.
+\textbf{Missing Bitcoin input:} repair the dataset for the separate checker/demo
+(page 3); passing mocked tests does not validate those files. The real demo is
+an integration exercise, not a substitute for automated tests or vice versa.
+
+\newpage
+\pagetitle{5. Demonstration: repayment and default}
+This observed local run uses \entity{--principal 1}. The fresh oracle response
+is \textbf{4,000,000 satoshi = 0.04 BTC}, equivalent to \textbf{1.2 ETH} of
+capacity at 30 ETH/BTC. BTC are not transferred or locked. The contributor
+deposits \textbf{50 ETH}; its wallet falls from 100 ETH to roughly 50 ETH
+after gas, while the pool holds 50 ETH of disposable capital.
+
+\subhead{First loan: 1 ETH, 5\% interest, two installments}
+After the YES vote and 12-block period, approval creates and funds a dedicated
+loan. The pool holds 49 ETH; the contributor has \textbf{49 disposable + 1 locked}.
+The debt is \textbf{1.05 ETH}. With the loan's \textbf{50\% collateral}, each
+0.525 ETH installment restores 0.5 ETH of principal and pays 0.025 ETH of
+interest, divided equally between reserve and contributor gain:
+
+\begin{tabularx}{\linewidth}{@{}Xrr@{}}
+\toprule
+\textbf{Destination} & \textbf{Each installment (ETH)} & \textbf{Both (ETH)}\\\midrule
+Principal restored to disposable capital & 0.5000 & 1.0000\\
+Interest credited to compensation reserve & 0.0125 & 0.0250\\
+Interest credited as contributor gain & 0.0125 & 0.0250\\\midrule
+Borrower payment & 0.5250 & 1.0500\\\bottomrule
+\end{tabularx}
+
+The loan becomes \entity{Repaid}: disposable capital returns to 50 ETH and
+locked capital to zero. The contributor claims the 0.025 ETH gain; the pool
+retains \textbf{50 ETH capital + 0.025 ETH reserve}. Global collateral decreases
+from 50\% to \textbf{45\%}, while the first loan's own percentage remains 50\%.
+
+\subhead{Second loan: expiry does not execute a transaction}
+A second proposal receives YES and is resolved after another 12-block period.
+It disburses \textbf{0.5 ETH} at 10\% interest, with collateral fixed at
+\textbf{45\%}, and is deliberately not repaid. It is funded at block
+\textbf{328} and due at \textbf{331}. At block 332 it is overdue but still
+stored as \entity{Funded}: merely passing a block height does not execute code.
+The compensation transaction at block \textbf{333} records \entity{Defaulted},
+reduces active loans to zero, counts one failure and raises global collateral
+back to \textbf{50\%}. The second loan's own percentage stays 45\%.
+
+\subhead{Compensation: limited reserve and preserved claim}
+Unpaid principal is 0.5 ETH, but the reserve holds only 0.025 ETH. The contributor
+receives \textbf{0.025 ETH directly in its wallet}; the remaining principal
+claim is \textbf{0.475 ETH}. The retry at block \textbf{334} pays zero without
+erasing this claim or counting the default twice.
+
+\begin{tabularx}{\linewidth}{@{}Xrr@{}}
+\toprule
+\textbf{Pool accounting (ETH)} & \textbf{Before compensation} & \textbf{After / retry}\\\midrule
+Contributor total position & 50.000 & 49.975\\
+Contributor disposable capital & 49.500 & 49.500\\
+Contributor locked principal & 0.500 & 0.475\\
+Compensation reserve & 0.025 & 0\\
+Actual ETH held by the pool & 49.525 & 49.500\\\bottomrule
+\end{tabularx}
+
+\textbf{Interpretation.} The 0.475 ETH locked position is an \textbf{unrecovered
+claim, not withdrawable cash}. Compensation reduces both total position and
+locked principal, leaving disposable capital unchanged:
+$49.975-0.475=49.5$ ETH. Future reserve refills or late repayments may allow
+further recovery, but it is not guaranteed. \textbf{Zero active loans does not
+mean zero loss.}
+
+\subhead{Wallet balances and transaction count}
+The contributor's final wallet is \textbf{50.0499454037 ETH}, including gas:
+interest gain and compensation arrived there, while 49.5 ETH remain disposable
+in the pool. This run adds \textbf{11 demo transactions + 1 oracle update + 2 YES
+votes = 14}; setup adds six (three transfers and three deployments).
+The oracle holds 0.0000098852 ETH because an earlier unsuccessful address
+request also paid its fee. That earlier request/response pair is outside this
+run's 14 transactions. Block numbers and wallet values belong to this observed
+run; reused deployments and different input can change them.
 \end{document}
