@@ -221,6 +221,11 @@ le code SQLite dopo errori RPC temporanei: sono separate dall'indice Bitcoin.
 ./.venv/bin/python python/simulate.py \
   --btc-address 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa --principal 1
 \end{codeblock}
+\textbf{Parametro.} \entity{--principal} indica il capitale richiesto per il primo prestito
+in \textbf{ETH}, esclusi gli interessi (predefinito: 1 ETH), non BTC né il deposito
+del contributore. Lo scenario B usa metà di quel capitale, arrotondata per
+difetto al wei con un minimo di 1 wei.
+
 Questo indirizzo ha \textbf{4.000.000 satoshi} nello snapshot validato, sufficienti
 per 1 ETH al cambio fisso. Lo scenario A
 rimborsa 1 ETH al 5\% in due rate e riscuote il guadagno; B lascia insoluti 0,5 ETH,
@@ -347,7 +352,7 @@ npm test -- test/reentrancy.test.ts
 npm test -- test/upgrade.test.ts
 npm test -- contracts/test/LoanContract.t.sol
 ./.venv/bin/python -m unittest discover -s python/tests \
-  -p 'test_demo_scenarios.py' -v
+  -p test_demo_scenarios.py -v
 \end{codeblock}
 Scegliere il comando per: contabilità; eventi e indipendenza dei prestiti;
 reentrancy; aggiornamenti; regole native del prestito; oppure \textbf{sei

@@ -218,6 +218,11 @@ queue after temporary RPC failures; it is separate from Bitcoin indexing.
 ./.venv/bin/python python/simulate.py \
   --btc-address 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa --principal 1
 \end{codeblock}
+\textbf{Parameter.} \entity{--principal} sets the first loan's requested principal in
+\textbf{ETH}, excluding interest (default: 1 ETH). It is not a BTC amount or
+the contributor's deposit. Scenario B uses half that principal, rounded down
+to wei with a minimum of 1 wei.
+
 This concrete address has \textbf{4,000,000 satoshi} in the validated snapshot,
 enough for 1 ETH at the fixed rate.
 Scenario A repays a 1 ETH loan at 5\% in two installments and claims gain.
@@ -341,7 +346,7 @@ npm test -- test/reentrancy.test.ts
 npm test -- test/upgrade.test.ts
 npm test -- contracts/test/LoanContract.t.sol
 ./.venv/bin/python -m unittest discover -s python/tests \
-  -p 'test_demo_scenarios.py' -v
+  -p test_demo_scenarios.py -v
 \end{codeblock}
 Choose the relevant command: accounting; events and loan isolation; reentrancy;
 upgrades; native loan rules; or \textbf{six offline demo checks}. Event checks

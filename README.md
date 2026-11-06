@@ -190,7 +190,12 @@ reserves can change these numbers when reusing a deployment.
 All receipt statuses are checked. Compensation checks include payout, reserve,
 principal claim, contributor/pool accounting and one-time failure adjustments.
 Balances, collateral, current/due blocks and loan states are printed along the
-way. Passing the deadline alone does not execute a transaction: default is recorded
+way. Console output groups the ten demo phases, wallet/contract balances,
+contributor positions, pool accounting and per-loan state separately. ETH values
+are formatted exactly, including single wei; Bitcoin balances show satoshi and
+BTC. Waiting messages identify the oracle response, voter and block deadlines.
+The phase numbers are not a count of Ethereum transactions.
+Passing the deadline alone does not execute a transaction: default is recorded
 by the subsequent request. With 10-second Clique blocks, allow several minutes for
 both voting periods; `--timeout` applies separately to each asynchronous step.
 
