@@ -47,7 +47,9 @@
 {\fontsize{20}{23}\selectfont\bfseries\color{Navy}Decentralised Lending Service\par}
 \vspace{0.5mm}
 {\small Marco Pernisco / Student ID 683674\quad
-\textcolor{Muted}{P2P Systems and Blockchains Lab 2025/26 / Trace 1.1}\par}
+\textcolor{Muted}{P2P Systems and Blockchains Lab 2025/26}\par}
+{\footnotesize\textbf{Source code:}
+\url{https://github.com/Marcop-00/Decentralised-Lending-Service}\par}
 \endgroup
 \vspace{1mm}
 \subhead{1. Architecture and protocol}
@@ -386,12 +388,11 @@ viem 2.57.3; Solidity 0.8.24, optimizer 200 runs, EVM/hardfork
 \subhead{Reproduce the measurements}
 \begin{codeblock}
 npm run test:gas
-./.venv/bin/python docs/render_gas_table.py
 \end{codeblock}
 Expect \textbf{1 passing} profiling test covering \textbf{20 operation scenarios}.
 It records receipt \entity{gasUsed}, including intrinsic gas, in
-\entity{docs/gas-measurements.json}; the Python command regenerates
-\entity{docs/gas-table.tex}. Recompile the report to refresh this table.
+\entity{docs/gas-measurements.json}, created automatically when the test runs.
+The table below presents the measured results for this implementation.
 The full \entity{npm test} run also includes profiling and rewrites the JSON.
 
 \subhead{Measured gas costs}

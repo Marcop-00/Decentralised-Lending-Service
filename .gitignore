@@ -34,3 +34,6 @@ private-chain/geth
 
 # Durable local event queues
 python/**/events-*.sqlite3*
+
+# Generated submission folders and ZIP archives
+submission/

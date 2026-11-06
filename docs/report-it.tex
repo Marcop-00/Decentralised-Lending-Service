@@ -49,6 +49,8 @@
 \vspace{0.5mm}
 {\small Marco Pernisco / Matricola 683674\quad
 \textcolor{Muted}{P2P Systems and Blockchains Lab 2025/26}\par}
+{\footnotesize\textbf{Codice sorgente:}
+\url{https://github.com/Marcop-00/Decentralised-Lending-Service}\par}
 \endgroup
 \vspace{1mm}
 \subhead{1. Architettura e protocollo}
@@ -394,13 +396,12 @@ contratti, con bytecode ordinario per le misurazioni.
 \subhead{Riprodurre le misure}
 \begin{codeblock}
 npm run test:gas
-./.venv/bin/python docs/render_gas_table.py --language it
 \end{codeblock}
 L'esito atteso è \textbf{1 passing}: un test di profilazione per \textbf{20 scenari}.
 Registra \entity{gasUsed} delle ricevute, incluso il gas intrinseco, in
-\entity{docs/gas-measurements.json}; il comando Python genera
-\entity{docs/gas-table-it.tex}. Ricompilare questa relazione per aggiornare
-la tabella. Anche \entity{npm test} include la profilazione e riscrive il JSON.
+\entity{docs/gas-measurements.json}, creato automaticamente durante il test.
+La tabella seguente riporta i risultati misurati per questa implementazione.
+Anche \entity{npm test} include la profilazione e riscrive il JSON.
 
 \subhead{Costi del gas misurati}
 \input{gas-table-it.tex}

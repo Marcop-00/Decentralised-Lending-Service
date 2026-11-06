@@ -283,6 +283,8 @@ within the block gas limit is outside this didactic design.
 | docs/default-demo-verification.json | New isolated Geth verification of both demo scenarios, with source hashes and final accounting. |
 | docs/gas-measurements.json, docs/gas-table.tex | Measured gas costs and the generated report table. |
 | docs/gas-table-it.tex | Italian gas table generated from the same measurements with --language it. |
+| scripts/prepare_submission.py | Creates an allowlisted submission folder and ZIP without local deployment data. |
+| scripts/tests/ | Independent safety tests for the submission builder (standard library only). |
 
 setup.sh installs the development tools; python/setup.py deploys the application.
 Neither test fixtures nor test contracts are alternative service implementations.
@@ -340,3 +342,48 @@ Before submission, prepare the course ZIP with source, tests, configuration,
 lockfile, scripts and the report.
 Omit node_modules, .venv, .env, event databases and regenerable
 Ethereum data. Make the exact Bitcoin snapshot available according to course rules.
+
+### Prepare the submission folder and ZIP
+
+From the project root, use Python 3.10+; no installed Node/Python dependencies,
+running chain or generated service configurations are needed for packaging:
+
+    python3 -m unittest discover -s scripts/tests -v
+    python3 scripts/prepare_submission.py
+
+This creates `submission/Decentralised-Lending-Service-683674-en/` and the
+matching `.zip`. The ZIP contains exactly that one top-level folder: the
+complete Hardhat project (Solidity, TypeScript tests/helpers, configuration,
+package manifest and lockfile), Python application/tests, setup script,
+`docs/report.pdf` in English and the original private-chain laboratory material.
+The supplied laboratory keystore/password are required by the documented Geth
+and setup commands; no generated service accounts or personal keys are included.
+
+`docs/` initially contains only the selected PDF. The report provides the user
+manual, test commands and gas analysis; no README, SUBMISSION.md, manifest,
+packaging scripts or repository metadata are included in the ZIP. The README
+and submission builder remain available in the repository. The builder prints
+the ZIP checksum without creating a manifest. Files are selected explicitly, not
+by copying the working tree or by assuming `.gitignore` protects secrets.
+Source symlinks and an unexpected laboratory account are rejected.
+
+The personal oral-exam guide, other report language, historical run evidence,
+assignment PDF, dependencies, .env files, SQLite queues, chain state, Bitcoin
+data, Geth binary and build/LaTeX intermediates are deliberately omitted.
+LaTeX sources, logo, gas tables and their renderer stay in the repository, not
+in the ZIP. Gas tests create `docs/gas-measurements.json` when executed, so an
+initial measurement file is not needed to run them. The repository README
+documents study material and report generation separately from the delivery.
+The full real demonstration still needs the external Bitcoin dataset described
+above; packaging does not make that input optional.
+
+English is the default. To select Italian, use `--report-language it`; the
+selected PDF is always named `docs/report.pdf` inside the ZIP. Existing output folders
+and ZIPs are never overwritten. After further changes, create another snapshot:
+
+    python3 scripts/prepare_submission.py --output-dir submission/revised
+
+Before uploading, extract the exact ZIP into a new directory, run `./setup.sh`,
+then the type check, contract tests and Python tests documented in the report. Do not
+deploy or run the real demo just to execute the isolated tests. Creating the
+ZIP does not itself run tests, change the report or waive its five-page limit.
